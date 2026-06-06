@@ -1,0 +1,242 @@
+import { useEffect, useState } from 'react'
+import { supabase } from '../lib/supabase'
+
+const EMPTY_FORM = {
+  business_name: '',
+  owner_name: '',
+  address: '',
+  contact: '',
+  notes: '',
+}
+
+export default function Customers() {
+  const [customers, setCustomers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [modalOpen, setModalOpen] = useState(false)
+  const [form, setForm] = useState(EMPTY_FORM)
+  const [editId, setEditId] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    fetchCustomers()
+  }, [])
+
+  async function fetchCustomers() {
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('customers')
+      .select('*')
+      .order('business_name', { ascending: true })
+    if (!error) setCustomers(data)
+    setLoading(false)
+  }
+
+  const filtered = customers.filter((c) => {
+    const q = search.toLowerCase()
+    return (
+      c.business_name?.toLowerCase().includes(q) ||
+      c.owner_name?.toLowerCase().includes(q) ||
+      c.contact?.toLowerCase().includes(q)
+    )
+  })
+
+  function openAdd() {
+    setForm(EMPTY_FORM)
+    setEditId(null)
+    setError('')
+    setModalOpen(true)
+  }
+
+  function openEdit(c) {
+    setForm({
+      business_name: c.business_name ?? '',
+      owner_name: c.owner_name ?? '',
+      address: c.address ?? '',
+      contact: c.contact ?? '',
+      notes: c.notes ?? '',
+    })
+    setEditId(c.id)
+    setError('')
+    setModalOpen(true)
+  }
+
+  async function handleSave(e) {
+    e.preventDefault()
+    if (!form.business_name.trim()) {
+      setError('Business name is required.')
+      return
+    }
+    setSaving(true)
+    setError('')
+    const payload = {
+      business_name: form.business_name.trim(),
+      owner_name: form.owner_name.trim() || null,
+      address: form.address.trim() || null,
+      contact: form.contact.trim() || null,
+      notes: form.notes.trim() || null,
+    }
+    let err
+    if (editId) {
+      ;({ error: err } = await supabase.from('customers').update(payload).eq('id', editId))
+    } else {
+      ;({ error: err } = await supabase.from('customers').insert(payload))
+    }
+    setSaving(false)
+    if (err) { setError(err.message); return }
+    setModalOpen(false)
+    fetchCustomers()
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return
+    await supabase.from('customers').delete().eq('id', deleteTarget.id)
+    setDeleteTarget(null)
+    fetchCustomers()
+  }
+
+  return (
+    <div className="p-6 max-w-5xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-semibold text-gray-800">Customers</h1>
+        <button
+          onClick={openAdd}
+          className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg"
+        >
+          + Add Customer
+        </button>
+      </div>
+
+      {/* Search */}
+      <input
+        type="text"
+        placeholder="Search by name, owner, or contact…"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+
+      {/* Table */}
+      {loading ? (
+        <p className="text-sm text-gray-400 text-center py-12">Loading…</p>
+      ) : filtered.length === 0 ? (
+        <p className="text-sm text-gray-400 text-center py-12">No customers found.</p>
+      ) : (
+        <div className="overflow-x-auto rounded-lg border border-gray-200">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
+              <tr>
+                <th className="text-left px-4 py-3">Business Name</th>
+                <th className="text-left px-4 py-3">Owner</th>
+                <th className="text-left px-4 py-3">Contact</th>
+                <th className="text-left px-4 py-3">Address</th>
+                <th className="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 bg-white">
+              {filtered.map((c) => (
+                <tr key={c.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3 font-medium text-gray-800">{c.business_name}</td>
+                  <td className="px-4 py-3 text-gray-600">{c.owner_name ?? '—'}</td>
+                  <td className="px-4 py-3 text-gray-600">{c.contact ?? '—'}</td>
+                  <td className="px-4 py-3 text-gray-600 max-w-xs truncate">{c.address ?? '—'}</td>
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <button
+                      onClick={() => openEdit(c)}
+                      className="text-blue-600 hover:underline text-xs mr-3"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => setDeleteTarget(c)}
+                      className="text-red-500 hover:underline text-xs"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Add / Edit Modal */}
+      {modalOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="font-semibold text-gray-800">{editId ? 'Edit Customer' : 'Add Customer'}</h2>
+              <button onClick={() => setModalOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+            </div>
+            <form onSubmit={handleSave} className="px-6 py-4 space-y-3">
+              {error && <p className="text-red-500 text-xs">{error}</p>}
+              <Field label="Business Name *" value={form.business_name} onChange={(v) => setForm({ ...form, business_name: v })} />
+              <Field label="Owner Name" value={form.owner_name} onChange={(v) => setForm({ ...form, owner_name: v })} />
+              <Field label="Contact" value={form.contact} onChange={(v) => setForm({ ...form, contact: v })} />
+              <Field label="Address" value={form.address} onChange={(v) => setForm({ ...form, address: v })} />
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
+                <textarea
+                  rows={2}
+                  value={form.notes}
+                  onChange={(e) => setForm({ ...form, notes: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg"
+                >
+                  {saving ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
+            <h2 className="font-semibold text-gray-800 mb-2">Delete customer?</h2>
+            <p className="text-sm text-gray-500 mb-4">
+              <span className="font-medium text-gray-700">{deleteTarget.business_name}</span> will be permanently removed.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
+                Cancel
+              </button>
+              <button onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-lg">
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Field({ label, value, onChange }) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+    </div>
+  )
+}
