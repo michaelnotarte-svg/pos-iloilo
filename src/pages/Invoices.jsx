@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { fetchListNames, PAYMENT_FALLBACK } from '../lib/lists'
+import ManageListModal from '../components/ManageListModal'
+import ManageCustomersModal from '../components/ManageCustomersModal'
 
 const SALE_TYPES = ['Walk-in', 'Delivery', 'Out-of-Town']
 const STATUSES = ['Unpaid', 'Partial', 'Paid']
@@ -17,6 +20,7 @@ const EMPTY_FORM = {
   date: new Date().toISOString().slice(0, 10),
   sale_type: 'Walk-in',
   status: 'Unpaid',
+  payment_method: '',
 }
 
 export default function Invoices() {
@@ -30,17 +34,29 @@ export default function Invoices() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [paymentOptions, setPaymentOptions] = useState(PAYMENT_FALLBACK)
+  const [managePayment, setManagePayment] = useState(false)
+  const [manageCustomers, setManageCustomers] = useState(false)
 
-  useEffect(() => { fetchAll() }, [])
+  useEffect(() => { fetchAll(); loadPayments() }, [])
+
+  async function loadPayments() {
+    setPaymentOptions(await fetchListNames('payment_method', PAYMENT_FALLBACK))
+  }
+
+  async function loadCustomers() {
+    const { data } = await supabase.from('customers').select('id, business_name, display_name').order('business_name')
+    setCustomers(data ?? [])
+  }
 
   async function fetchAll() {
     setLoading(true)
     const [{ data: invData }, { data: custData }] = await Promise.all([
       supabase
         .from('invoices')
-        .select('*, customers(business_name), invoice_lines(amount)')
+        .select('*, customers(business_name, display_name), invoice_lines(amount)')
         .order('date', { ascending: false }),
-      supabase.from('customers').select('id, business_name').order('business_name'),
+      supabase.from('customers').select('id, business_name, display_name').order('business_name'),
     ])
     setInvoices(invData ?? [])
     setCustomers(custData ?? [])
@@ -51,7 +67,8 @@ export default function Invoices() {
     const q = search.toLowerCase()
     const matchSearch =
       inv.invoice_number?.toLowerCase().includes(q) ||
-      inv.customers?.business_name?.toLowerCase().includes(q)
+      inv.customers?.business_name?.toLowerCase().includes(q) ||
+      inv.customers?.display_name?.toLowerCase().includes(q)
     const matchStatus = statusFilter === 'All' || inv.status === statusFilter
     return matchSearch && matchStatus
   })
@@ -70,6 +87,7 @@ export default function Invoices() {
       date: form.date,
       sale_type: form.sale_type,
       status: form.status,
+      payment_method: form.status === 'Paid' ? (form.payment_method || null) : null,
     }
     const { data, error: err } = await supabase.from('invoices').insert(payload).select().single()
     setSaving(false)
@@ -137,7 +155,7 @@ export default function Invoices() {
                 >
                   <td className="px-4 py-3 font-medium text-blue-700">{inv.invoice_number}</td>
                   <td className="px-4 py-3 text-gray-600">{inv.date}</td>
-                  <td className="px-4 py-3 text-gray-700">{inv.customers?.business_name ?? <span className="text-gray-400 italic">Walk-in</span>}</td>
+                  <td className="px-4 py-3 text-gray-700">{inv.customers ? (inv.customers.display_name || inv.customers.business_name) : <span className="text-gray-400 italic">Walk-in</span>}</td>
                   <td className="px-4 py-3 text-gray-600">{inv.sale_type}</td>
                   <td className="px-4 py-3 text-right font-medium text-gray-800">
                     ₱{grandTotal(inv).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -185,7 +203,10 @@ export default function Invoices() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Customer</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-gray-600">Customer</label>
+                  <button type="button" onClick={() => setManageCustomers(true)} className="text-[11px] text-blue-600 hover:underline">Manage</button>
+                </div>
                 <select
                   value={form.customer_id}
                   onChange={(e) => set('customer_id', e.target.value)}
@@ -193,7 +214,7 @@ export default function Invoices() {
                 >
                   <option value="">— Walk-in / No customer —</option>
                   {customers.map((c) => (
-                    <option key={c.id} value={c.id}>{c.business_name}</option>
+                    <option key={c.id} value={c.id}>{c.display_name || c.business_name}</option>
                   ))}
                 </select>
               </div>
@@ -221,6 +242,23 @@ export default function Invoices() {
                 </div>
               </div>
 
+              {form.status === 'Paid' && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-medium text-gray-600">Payment Method</label>
+                    <button type="button" onClick={() => setManagePayment(true)} className="text-[11px] text-blue-600 hover:underline">Manage</button>
+                  </div>
+                  <select
+                    value={form.payment_method}
+                    onChange={(e) => set('payment_method', e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">— Select —</option>
+                    {paymentOptions.map((m) => <option key={m}>{m}</option>)}
+                  </select>
+                </div>
+              )}
+
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
                 <button type="submit" disabled={saving} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg">
@@ -230,6 +268,22 @@ export default function Invoices() {
             </form>
           </div>
         </div>
+      )}
+
+      {managePayment && (
+        <ManageListModal
+          listType="payment_method"
+          title="Manage Payment Methods"
+          onClose={() => setManagePayment(false)}
+          onChange={loadPayments}
+        />
+      )}
+
+      {manageCustomers && (
+        <ManageCustomersModal
+          onClose={() => setManageCustomers(false)}
+          onChange={loadCustomers}
+        />
       )}
     </div>
   )

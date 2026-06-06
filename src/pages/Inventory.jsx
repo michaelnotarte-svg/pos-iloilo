@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-
-const STORAGE_OPTIONS = ['Everest', 'FishingPort']
+import { fetchListNames, STORAGE_FALLBACK } from '../lib/lists'
+import ManageListModal from '../components/ManageListModal'
 
 const EMPTY_FORM = {
   snapshot_date: new Date().toISOString().slice(0, 10),
@@ -32,8 +32,14 @@ export default function Inventory() {
   const [saving, setSaving]       = useState(false)
   const [error, setError]         = useState('')
   const [deleteTarget, setDeleteTarget] = useState(null)
+  const [storageOptions, setStorageOptions] = useState(STORAGE_FALLBACK)
+  const [manageStorage, setManageStorage] = useState(false)
 
-  useEffect(() => { fetchAll() }, [])
+  useEffect(() => { fetchAll(); loadStorage() }, [])
+
+  async function loadStorage() {
+    setStorageOptions(await fetchListNames('storage', STORAGE_FALLBACK))
+  }
 
   async function fetchAll() {
     setLoading(true)
@@ -186,7 +192,7 @@ export default function Inventory() {
           className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="All">All Locations</option>
-          {STORAGE_OPTIONS.map((s) => <option key={s}>{s}</option>)}
+          {storageOptions.map((s) => <option key={s}>{s}</option>)}
         </select>
         <select
           value={dateFilter}
@@ -314,13 +320,16 @@ export default function Inventory() {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Storage *</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-medium text-gray-600">Storage *</label>
+                    <button type="button" onClick={() => setManageStorage(true)} className="text-[11px] text-blue-600 hover:underline">Manage</button>
+                  </div>
                   <select
                     value={form.storage}
                     onChange={(e) => set('storage', e.target.value)}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
-                    {STORAGE_OPTIONS.map((s) => <option key={s}>{s}</option>)}
+                    {storageOptions.map((s) => <option key={s}>{s}</option>)}
                   </select>
                 </div>
               </div>
@@ -384,6 +393,15 @@ export default function Inventory() {
             </div>
           </div>
         </div>
+      )}
+
+      {manageStorage && (
+        <ManageListModal
+          listType="storage"
+          title="Manage Storage Locations"
+          onClose={() => setManageStorage(false)}
+          onChange={loadStorage}
+        />
       )}
     </div>
   )

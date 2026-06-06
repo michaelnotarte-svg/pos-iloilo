@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-
-const STORAGE_OPTIONS = ['Everest', 'FishingPort']
+import { fetchListNames, STORAGE_FALLBACK } from '../lib/lists'
+import ManageListModal from '../components/ManageListModal'
 
 const EMPTY_LINE = {
   item_id: '',
@@ -10,7 +10,12 @@ const EMPTY_LINE = {
   batch_number: '',
   boxes: '',
   kilos: '',
-  date: new Date().toISOString().slice(0, 10),
+}
+
+function buildItemName(base, brand) {
+  const b = base.trim()
+  const br = brand.trim()
+  return br ? `${b} - ${br}` : b
 }
 
 export default function PurchaseOrderDetail() {
@@ -33,13 +38,34 @@ export default function PurchaseOrderDetail() {
   const [editLineId, setEditLineId] = useState(null)
   const [savingLine, setSavingLine] = useState(false)
   const [lineError, setLineError] = useState('')
+  const [storageOverride, setStorageOverride] = useState(false)
+
+  const [storageOptions, setStorageOptions] = useState(STORAGE_FALLBACK)
+  const [categoryOptions, setCategoryOptions] = useState([])
+  const [supplierOptions, setSupplierOptions] = useState([])
+  const [sourceOptions, setSourceOptions] = useState([])
+  const [manageList, setManageList] = useState(null)
+
+  // Quick-add item
+  const [quickAddOpen, setQuickAddOpen] = useState(false)
+  const [quickAddForm, setQuickAddForm] = useState({ base_name: '', brand: '' })
+  const [quickAddSaving, setQuickAddSaving] = useState(false)
+  const [quickAddError, setQuickAddError] = useState('')
 
   const [deleteLineTarget, setDeleteLineTarget] = useState(null)
   const [deletePOConfirm, setDeletePOConfirm] = useState(false)
 
   useEffect(() => {
     fetchAll()
+    loadStorage()
   }, [id])
+
+  async function loadStorage() {
+    setStorageOptions(await fetchListNames('storage', STORAGE_FALLBACK))
+    setCategoryOptions(await fetchListNames('delivery_category', []))
+    setSupplierOptions(await fetchListNames('supplier', []))
+    setSourceOptions(await fetchListNames('source', []))
+  }
 
   async function fetchAll() {
     setLoading(true)
@@ -47,15 +73,16 @@ export default function PurchaseOrderDetail() {
       supabase.from('purchase_orders').select('*').eq('id', id).single(),
       supabase
         .from('stock_entries')
-        .select('*, items(name, unit)')
+        .select('*, items(name)')
         .eq('po_id', id)
         .order('created_at'),
-      supabase.from('items').select('id, name, unit').order('name'),
+      supabase.from('items').select('id, name').order('name'),
     ])
     setPo(poData)
     setHeaderForm({
       po_number: poData?.po_number ?? '',
       date: poData?.date ?? '',
+      storage: poData?.storage ?? 'Everest',
       supplier: poData?.supplier ?? '',
       source: poData?.source ?? '',
       category: poData?.category ?? '',
@@ -73,6 +100,7 @@ export default function PurchaseOrderDetail() {
     await supabase.from('purchase_orders').update({
       po_number: headerForm.po_number,
       date: headerForm.date,
+      storage: headerForm.storage,
       supplier: headerForm.supplier || null,
       source: headerForm.source || null,
       category: headerForm.category || null,
@@ -85,9 +113,10 @@ export default function PurchaseOrderDetail() {
 
   // ── Lines ────────────────────────────────────────────────
   async function openAddLine() {
-    setLineForm({ ...EMPTY_LINE, date: po?.date ?? new Date().toISOString().slice(0, 10) })
+    setLineForm({ ...EMPTY_LINE, storage: po?.storage ?? 'Everest' })
     setEditLineId(null)
     setLineError('')
+    setStorageOverride(false)
     setLineModal(true)
   }
 
@@ -105,6 +134,36 @@ export default function PurchaseOrderDetail() {
     setLineForm((f) => ({ ...f, item_id: itemId, batch_number: batch }))
   }
 
+  function handleQuickAddItem(rawName) {
+    // Pre-fill the typed text as the base item name; brand entered separately
+    setQuickAddForm({ base_name: rawName.trim(), brand: '' })
+    setQuickAddError('')
+    setQuickAddOpen(true)
+  }
+
+  async function saveQuickAddItem(e) {
+    e.preventDefault()
+    if (!quickAddForm.base_name.trim()) { setQuickAddError('Item name is required.'); return }
+    setQuickAddSaving(true)
+    setQuickAddError('')
+    const { data, error: err } = await supabase
+      .from('items')
+      .insert({
+        name: buildItemName(quickAddForm.base_name, quickAddForm.brand),
+        base_name: quickAddForm.base_name.trim(),
+        brand: quickAddForm.brand.trim() || null,
+      })
+      .select('id, name')
+      .single()
+    setQuickAddSaving(false)
+    if (err) { setQuickAddError(err.message); return }
+    // Refresh the dropdown list, then select the new item
+    const { data: itemsData } = await supabase.from('items').select('id, name').order('name')
+    setItems(itemsData ?? [])
+    handleItemChange(data.id)
+    setQuickAddOpen(false)
+  }
+
   function openEditLine(line) {
     setLineForm({
       item_id: line.item_id,
@@ -112,28 +171,29 @@ export default function PurchaseOrderDetail() {
       batch_number: line.batch_number,
       boxes: line.boxes ?? '',
       kilos: line.kilos ?? '',
-      date: line.date,
     })
     setEditLineId(line.id)
     setLineError('')
+    setStorageOverride(line.storage !== (po?.storage ?? 'Everest'))
     setLineModal(true)
   }
 
   async function saveLine(e) {
     e.preventDefault()
     if (!lineForm.item_id) { setLineError('Select an item.'); return }
-    if (!lineForm.batch_number.trim()) { setLineError('Batch number is required.'); return }
-    if (!lineForm.kilos) { setLineError('Kilos is required.'); return }
+    if (!lineForm.batch_number.toString().trim()) { setLineError('Pick an item so a batch number can be assigned.'); return }
+    if (!lineForm.kilos || Number(lineForm.kilos) <= 0) { setLineError('Kilos must be greater than 0.'); return }
+    if (lineForm.boxes !== '' && Number(lineForm.boxes) < 0) { setLineError('Boxes cannot be negative.'); return }
     setSavingLine(true)
     setLineError('')
     const payload = {
       po_id: id,
       item_id: lineForm.item_id,
       storage: lineForm.storage,
-      batch_number: lineForm.batch_number.trim(),
+      batch_number: lineForm.batch_number.toString().trim(),
       boxes: lineForm.boxes ? Number(lineForm.boxes) : null,
       kilos: Number(lineForm.kilos),
-      date: lineForm.date,
+      date: po?.date ?? new Date().toISOString().slice(0, 10),
     }
     let err
     if (editLineId) {
@@ -156,7 +216,7 @@ export default function PurchaseOrderDetail() {
 
   async function deletePO() {
     await supabase.from('purchase_orders').delete().eq('id', id)
-    navigate('/inventory')
+    navigate('/stocks')
   }
 
   // ── Totals ───────────────────────────────────────────────
@@ -169,15 +229,15 @@ export default function PurchaseOrderDetail() {
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       {/* Back */}
-      <button onClick={() => navigate('/inventory')} className="text-sm text-blue-600 hover:underline">
-        ← Back to Purchase Orders
+      <button onClick={() => navigate('/stocks')} className="text-sm text-blue-600 hover:underline">
+        ← Back to Stocks
       </button>
 
       {/* ── PO Header Card ── */}
       <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
           <h2 className="text-lg font-semibold text-gray-800">
-            PO # <span className="text-blue-700">{po.po_number}</span>
+            Delivery <span className="text-blue-700">{po.po_number}</span>
           </h2>
           <div className="flex gap-2">
             {!editingHeader && (
@@ -193,7 +253,7 @@ export default function PurchaseOrderDetail() {
                   onClick={() => setDeletePOConfirm(true)}
                   className="text-sm text-red-500 hover:underline"
                 >
-                  Delete PO
+                  Delete Delivery
                 </button>
               </>
             )}
@@ -203,7 +263,7 @@ export default function PurchaseOrderDetail() {
         {editingHeader ? (
           <form onSubmit={saveHeader} className="px-6 py-4 space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              <HField label="PO #" value={headerForm.po_number} onChange={(v) => setHeaderForm({ ...headerForm, po_number: v })} />
+              <HField label="Ref #" value={headerForm.po_number} onChange={(v) => setHeaderForm({ ...headerForm, po_number: v })} />
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Date</label>
                 <input
@@ -215,10 +275,25 @@ export default function PurchaseOrderDetail() {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <HField label="Supplier" value={headerForm.supplier} onChange={(v) => setHeaderForm({ ...headerForm, supplier: v })} />
-              <HField label="Source" value={headerForm.source} onChange={(v) => setHeaderForm({ ...headerForm, source: v })} />
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-gray-600">Storage</label>
+                  <button type="button" onClick={() => setManageList('storage')} className="text-[11px] text-blue-600 hover:underline">Manage</button>
+                </div>
+                <select
+                  value={headerForm.storage}
+                  onChange={(e) => setHeaderForm({ ...headerForm, storage: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {storageOptions.map((s) => <option key={s}>{s}</option>)}
+                </select>
+              </div>
+              <HSelect label="Source" value={headerForm.source} onChange={(v) => setHeaderForm({ ...headerForm, source: v })} options={sourceOptions} onManage={() => setManageList('source')} />
             </div>
-            <HField label="Category" value={headerForm.category} onChange={(v) => setHeaderForm({ ...headerForm, category: v })} />
+            <div className="grid grid-cols-2 gap-3">
+              <HSelect label="Supplier" value={headerForm.supplier} onChange={(v) => setHeaderForm({ ...headerForm, supplier: v })} options={supplierOptions} onManage={() => setManageList('supplier')} />
+              <HSelect label="Category" value={headerForm.category} onChange={(v) => setHeaderForm({ ...headerForm, category: v })} options={categoryOptions} onManage={() => setManageList('delivery_category')} />
+            </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
               <textarea
@@ -240,8 +315,9 @@ export default function PurchaseOrderDetail() {
         ) : (
           <div className="px-6 py-4 grid grid-cols-2 sm:grid-cols-3 gap-x-8 gap-y-3 text-sm">
             <InfoRow label="Date" value={po.date} />
-            <InfoRow label="Supplier" value={po.supplier} />
+            <InfoRow label="Storage" value={po.storage} />
             <InfoRow label="Source" value={po.source} />
+            <InfoRow label="Supplier" value={po.supplier} />
             <InfoRow label="Category" value={po.category} />
             {po.notes && (
               <div className="col-span-2 sm:col-span-3">
@@ -277,6 +353,7 @@ export default function PurchaseOrderDetail() {
                   <th className="text-left px-4 py-3">Storage</th>
                   <th className="text-right px-4 py-3">Boxes</th>
                   <th className="text-right px-4 py-3">Kilos</th>
+                  <th className="text-right px-4 py-3">Kg/Box</th>
                   <th className="text-left px-4 py-3">Date</th>
                   <th className="px-4 py-3"></th>
                 </tr>
@@ -293,6 +370,7 @@ export default function PurchaseOrderDetail() {
                     </td>
                     <td className="px-4 py-3 text-right text-gray-700">{l.boxes != null ? Number(l.boxes).toLocaleString() : '—'}</td>
                     <td className="px-4 py-3 text-right text-gray-700">{Number(l.kilos).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 })}</td>
+                    <td className="px-4 py-3 text-right text-gray-500">{l.boxes > 0 ? (Number(l.kilos) / Number(l.boxes)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</td>
                     <td className="px-4 py-3 text-gray-500">{l.date}</td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       <button onClick={() => openEditLine(l)} className="text-blue-600 hover:underline text-xs mr-3">Edit</button>
@@ -306,6 +384,7 @@ export default function PurchaseOrderDetail() {
                   <td colSpan={3} className="px-4 py-3 text-right text-xs uppercase text-gray-500 tracking-wide">Totals</td>
                   <td className="px-4 py-3 text-right">{totalBoxes.toLocaleString()}</td>
                   <td className="px-4 py-3 text-right">{totalKilos.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 })}</td>
+                  <td className="px-4 py-3 text-right">{totalBoxes > 0 ? (totalKilos / totalBoxes).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</td>
                   <td colSpan={2}></td>
                 </tr>
               </tfoot>
@@ -327,30 +406,52 @@ export default function PurchaseOrderDetail() {
 
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Item *</label>
-                <select
+                <ItemCombobox
+                  items={items}
                   value={lineForm.item_id}
-                  onChange={(e) => handleItemChange(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Select item…</option>
-                  {items.map((i) => (
-                    <option key={i.id} value={i.id}>{i.name}</option>
-                  ))}
-                </select>
+                  onSelect={handleItemChange}
+                  onQuickAdd={handleQuickAddItem}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Storage *</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-medium text-gray-600">Storage *</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStorageOverride((v) => {
+                          const next = !v
+                          if (!next) setLineForm((f) => ({ ...f, storage: po?.storage ?? 'Everest' }))
+                          return next
+                        })
+                      }}
+                      className="text-[11px] text-blue-600 hover:underline"
+                    >
+                      {storageOverride ? 'Use delivery default' : 'Override'}
+                    </button>
+                  </div>
                   <select
                     value={lineForm.storage}
+                    disabled={!storageOverride}
                     onChange={(e) => setLineForm({ ...lineForm, storage: e.target.value })}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${storageOverride ? 'border-gray-300' : 'border-gray-200 bg-gray-50 text-gray-500 cursor-not-allowed'}`}
                   >
-                    {STORAGE_OPTIONS.map((s) => <option key={s}>{s}</option>)}
+                    {storageOptions.map((s) => <option key={s}>{s}</option>)}
                   </select>
                 </div>
-                <LField label="Batch # *" value={lineForm.batch_number} onChange={(v) => setLineForm({ ...lineForm, batch_number: v })} />
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Batch # (auto)</label>
+                  <input
+                    type="text"
+                    value={lineForm.batch_number}
+                    readOnly
+                    tabIndex={-1}
+                    placeholder="Select an item"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 cursor-not-allowed"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -358,20 +459,75 @@ export default function PurchaseOrderDetail() {
                 <LField label="Kilos *" value={lineForm.kilos} onChange={(v) => setLineForm({ ...lineForm, kilos: v })} type="number" />
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Date</label>
-                <input
-                  type="date"
-                  value={lineForm.date}
-                  onChange={(e) => setLineForm({ ...lineForm, date: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+              {(lineForm.boxes || lineForm.kilos) && (
+                <p className="text-xs text-right text-gray-500">
+                  Avg per box:{' '}
+                  <span className="font-semibold text-gray-700">
+                    {Number(lineForm.boxes) > 0 && Number(lineForm.kilos) > 0
+                      ? `${(Number(lineForm.kilos) / Number(lineForm.boxes)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg/box`
+                      : '—'}
+                  </span>
+                </p>
+              )}
 
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={() => setLineModal(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
                 <button type="submit" disabled={savingLine} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg">
                   {savingLine ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {manageList && (
+        <ManageListModal
+          listType={manageList}
+          title={DETAIL_LIST_TITLES[manageList] ?? 'Manage List'}
+          onClose={() => setManageList(null)}
+          onChange={loadStorage}
+        />
+      )}
+
+      {/* Quick-add Item Modal */}
+      {quickAddOpen && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60]">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+              <h2 className="font-semibold text-gray-800">New Item</h2>
+              <button onClick={() => setQuickAddOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+            </div>
+            <form onSubmit={saveQuickAddItem} className="px-6 py-4 space-y-3">
+              {quickAddError && <p className="text-red-500 text-xs">{quickAddError}</p>}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Item *</label>
+                <input
+                  type="text"
+                  autoFocus
+                  value={quickAddForm.base_name}
+                  onChange={(e) => setQuickAddForm({ ...quickAddForm, base_name: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1">Brand</label>
+                <input
+                  type="text"
+                  value={quickAddForm.brand}
+                  onChange={(e) => setQuickAddForm({ ...quickAddForm, brand: e.target.value })}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              {quickAddForm.base_name.trim() && (
+                <p className="text-xs text-gray-500">
+                  Saved as: <span className="font-semibold text-gray-700">{buildItemName(quickAddForm.base_name, quickAddForm.brand)}</span>
+                </p>
+              )}
+              <div className="flex justify-end gap-2 pt-2">
+                <button type="button" onClick={() => setQuickAddOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
+                <button type="submit" disabled={quickAddSaving} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg">
+                  {quickAddSaving ? 'Saving…' : 'Save & Select'}
                 </button>
               </div>
             </form>
@@ -399,13 +555,13 @@ export default function PurchaseOrderDetail() {
       {deletePOConfirm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
-            <h2 className="font-semibold text-gray-800 mb-2">Delete this PO?</h2>
+            <h2 className="font-semibold text-gray-800 mb-2">Delete this delivery?</h2>
             <p className="text-sm text-gray-500 mb-4">
-              PO <span className="font-medium text-gray-700">{po.po_number}</span> and all its stock entries will be permanently deleted.
+              Delivery <span className="font-medium text-gray-700">{po.po_number}</span> and all its stock entries will be permanently deleted.
             </p>
             <div className="flex justify-end gap-2">
               <button onClick={() => setDeletePOConfirm(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
-              <button onClick={deletePO} className="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-lg">Delete PO</button>
+              <button onClick={deletePO} className="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-lg">Delete Delivery</button>
             </div>
           </div>
         </div>
@@ -423,6 +579,13 @@ function InfoRow({ label, value }) {
   )
 }
 
+const DETAIL_LIST_TITLES = {
+  storage: 'Manage Storage Locations',
+  source: 'Manage Sources',
+  supplier: 'Manage Suppliers',
+  delivery_category: 'Manage Categories',
+}
+
 function HField({ label, value, onChange }) {
   return (
     <div>
@@ -433,6 +596,26 @@ function HField({ label, value, onChange }) {
         onChange={(e) => onChange(e.target.value)}
         className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
+    </div>
+  )
+}
+
+function HSelect({ label, value, onChange, options, onManage }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <label className="block text-xs font-medium text-gray-600">{label}</label>
+        <button type="button" onClick={onManage} className="text-[11px] text-blue-600 hover:underline">Manage</button>
+      </div>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
+        <option value="">— None —</option>
+        {options.map((o) => <option key={o}>{o}</option>)}
+        {value && !options.includes(value) && <option>{value}</option>}
+      </select>
     </div>
   )
 }
@@ -448,6 +631,59 @@ function LField({ label, value, onChange, type = 'text' }) {
         onChange={(e) => onChange(e.target.value)}
         className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
+    </div>
+  )
+}
+
+function ItemCombobox({ items, value, onSelect, onQuickAdd }) {
+  const selected = items.find((i) => i.id === value)
+  const [query, setQuery] = useState(selected ? selected.name : '')
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    const sel = items.find((i) => i.id === value)
+    setQuery(sel ? sel.name : '')
+  }, [value, items])
+
+  const q = query.toLowerCase().trim()
+  const filtered = q ? items.filter((i) => i.name.toLowerCase().includes(q)) : items
+  const exactMatch = items.some((i) => i.name.toLowerCase() === q)
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={query}
+        placeholder="Type to search items…"
+        onChange={(e) => { setQuery(e.target.value); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+      {open && (
+        <ul className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-y-auto text-sm">
+          {filtered.map((i) => (
+            <li
+              key={i.id}
+              onMouseDown={() => { onSelect(i.id); setOpen(false) }}
+              className={`px-3 py-2 cursor-pointer hover:bg-blue-50 ${i.id === value ? 'bg-blue-50 font-medium' : ''}`}
+            >
+              {i.name}
+            </li>
+          ))}
+          {q && !exactMatch && (
+            <li
+              onMouseDown={() => { onQuickAdd(query); setOpen(false) }}
+              className="px-3 py-2 cursor-pointer text-blue-600 hover:bg-blue-50 border-t border-gray-100"
+            >
+              + Add “{query.trim()}” as new item
+            </li>
+          )}
+          {filtered.length === 0 && !q && (
+            <li className="px-3 py-2 text-gray-400">No items yet — type a name to add one.</li>
+          )}
+        </ul>
+      )}
     </div>
   )
 }

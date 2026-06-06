@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { fetchListNames } from '../lib/lists'
+import ManageListModal from '../components/ManageListModal'
 
-const EMPTY_FORM = { name: '', category: '', unit: 'box' }
+const EMPTY_FORM = { base_name: '', brand: '', category: '' }
+
+function buildName(base, brand) {
+  const b = base.trim()
+  const br = brand.trim()
+  return br ? `${b} - ${br}` : b
+}
 
 export default function Items() {
   const [items, setItems] = useState([])
@@ -13,8 +21,18 @@ export default function Items() {
   const [saving, setSaving] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [error, setError] = useState('')
+  const [categoryOptions, setCategoryOptions] = useState([])
+  const [baseOptions, setBaseOptions] = useState([])
+  const [brandOptions, setBrandOptions] = useState([])
+  const [manageList, setManageList] = useState(null)
 
-  useEffect(() => { fetchItems() }, [])
+  useEffect(() => { fetchItems(); loadCategories() }, [])
+
+  async function loadCategories() {
+    setCategoryOptions(await fetchListNames('item_category', []))
+    setBaseOptions(await fetchListNames('item_base', []))
+    setBrandOptions(await fetchListNames('brand', []))
+  }
 
   async function fetchItems() {
     setLoading(true)
@@ -25,7 +43,11 @@ export default function Items() {
 
   const filtered = items.filter((i) => {
     const q = search.toLowerCase()
-    return i.name?.toLowerCase().includes(q) || i.category?.toLowerCase().includes(q)
+    return (
+      i.name?.toLowerCase().includes(q) ||
+      i.brand?.toLowerCase().includes(q) ||
+      i.category?.toLowerCase().includes(q)
+    )
   })
 
   function openAdd() {
@@ -36,7 +58,11 @@ export default function Items() {
   }
 
   function openEdit(item) {
-    setForm({ name: item.name, category: item.category ?? '', unit: item.unit ?? 'box' })
+    setForm({
+      base_name: item.base_name ?? item.name ?? '',
+      brand: item.brand ?? '',
+      category: item.category ?? '',
+    })
     setEditId(item.id)
     setError('')
     setModalOpen(true)
@@ -44,13 +70,14 @@ export default function Items() {
 
   async function handleSave(e) {
     e.preventDefault()
-    if (!form.name.trim()) { setError('Name is required.'); return }
+    if (!form.base_name.trim()) { setError('Item name is required.'); return }
     setSaving(true)
     setError('')
     const payload = {
-      name: form.name.trim(),
+      name: buildName(form.base_name, form.brand),
+      base_name: form.base_name.trim(),
+      brand: form.brand.trim() || null,
       category: form.category.trim() || null,
-      unit: form.unit.trim() || 'box',
     }
     let err
     if (editId) {
@@ -98,8 +125,8 @@ export default function Items() {
             <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
               <tr>
                 <th className="text-left px-4 py-3">Name</th>
+                <th className="text-left px-4 py-3">Brand</th>
                 <th className="text-left px-4 py-3">Category</th>
-                <th className="text-left px-4 py-3">Unit</th>
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
@@ -107,8 +134,8 @@ export default function Items() {
               {filtered.map((item) => (
                 <tr key={item.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 font-medium text-gray-800">{item.name}</td>
+                  <td className="px-4 py-3 text-gray-600">{item.brand ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-600">{item.category ?? '—'}</td>
-                  <td className="px-4 py-3 text-gray-600">{item.unit}</td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
                     <button onClick={() => openEdit(item)} className="text-blue-600 hover:underline text-xs mr-3">Edit</button>
                     <button onClick={() => setDeleteTarget(item)} className="text-red-500 hover:underline text-xs">Delete</button>
@@ -129,20 +156,26 @@ export default function Items() {
             </div>
             <form onSubmit={handleSave} className="px-6 py-4 space-y-3">
               {error && <p className="text-red-500 text-xs">{error}</p>}
-              <Field label="Name *" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
-              <Field label="Category" value={form.category} onChange={(v) => setForm({ ...form, category: v })} />
+              <ManagedSelect label="Item *" value={form.base_name} onChange={(v) => setForm({ ...form, base_name: v })} options={baseOptions} onManage={() => setManageList('item_base')} />
+              <ManagedSelect label="Brand" value={form.brand} onChange={(v) => setForm({ ...form, brand: v })} options={brandOptions} onManage={() => setManageList('brand')} />
+              {form.base_name.trim() && (
+                <p className="text-xs text-gray-500">
+                  Saved as: <span className="font-semibold text-gray-700">{buildName(form.base_name, form.brand)}</span>
+                </p>
+              )}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Unit</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-gray-600">Category</label>
+                  <button type="button" onClick={() => setManageList('item_category')} className="text-xs text-blue-600 hover:underline">Manage</button>
+                </div>
                 <select
-                  value={form.unit}
-                  onChange={(e) => setForm({ ...form, unit: e.target.value })}
+                  value={form.category}
+                  onChange={(e) => setForm({ ...form, category: e.target.value })}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option>box</option>
-                  <option>kg</option>
-                  <option>pack</option>
-                  <option>piece</option>
-                  <option>bag</option>
+                  <option value="">— None —</option>
+                  {categoryOptions.map((c) => <option key={c}>{c}</option>)}
+                  {form.category && !categoryOptions.includes(form.category) && <option>{form.category}</option>}
                 </select>
               </div>
               <div className="flex justify-end gap-2 pt-2">
@@ -170,6 +203,41 @@ export default function Items() {
           </div>
         </div>
       )}
+
+      {manageList && (
+        <ManageListModal
+          listType={manageList}
+          title={ITEM_LIST_TITLES[manageList] ?? 'Manage List'}
+          onClose={() => setManageList(null)}
+          onChange={loadCategories}
+        />
+      )}
+    </div>
+  )
+}
+
+const ITEM_LIST_TITLES = {
+  item_base: 'Manage Item Names',
+  brand: 'Manage Brands',
+  item_category: 'Manage Item Categories',
+}
+
+function ManagedSelect({ label, value, onChange, options, onManage }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <label className="block text-xs font-medium text-gray-600">{label}</label>
+        <button type="button" onClick={onManage} className="text-[11px] text-blue-600 hover:underline">Manage</button>
+      </div>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
+        <option value="">— None —</option>
+        {options.map((o) => <option key={o}>{o}</option>)}
+        {value && !options.includes(value) && <option>{value}</option>}
+      </select>
     </div>
   )
 }

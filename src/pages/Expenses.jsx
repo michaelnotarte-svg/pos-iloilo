@@ -6,10 +6,37 @@ const EMPTY_FORM = {
   description: '',
   amount: '',
   category: '',
+  is_recurring: false,
 }
+
+const PAGE_SIZE = 10
 
 function fmt(n) {
   return Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+function localISO(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// Returns [start, end] ISO strings for week (Mon–Sun), month, and quarter containing `now`
+function periodRanges(now) {
+  const y = now.getFullYear()
+  const m = now.getMonth()
+
+  // Week: Monday → Sunday
+  const dow = (now.getDay() + 6) % 7 // 0 = Monday
+  const monday = new Date(y, m, now.getDate() - dow)
+  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6)
+
+  // Quarter
+  const q = Math.floor(m / 3)
+
+  return {
+    week:    [localISO(monday), localISO(sunday)],
+    month:   [localISO(new Date(y, m, 1)), localISO(new Date(y, m + 1, 0))],
+    quarter: [localISO(new Date(y, q * 3, 1)), localISO(new Date(y, q * 3 + 3, 0))],
+  }
 }
 
 export default function Expenses() {
@@ -31,6 +58,7 @@ export default function Expenses() {
   const [deleteCatTarget, setDeleteCatTarget] = useState(null)
 
   const [monthFilter, setMonthFilter] = useState('All')
+  const [page, setPage] = useState(1)
 
   useEffect(() => { fetchAll() }, [])
 
@@ -59,7 +87,24 @@ export default function Expenses() {
     ? expenses
     : expenses.filter((e) => e.date?.startsWith(monthFilter))
 
+  // Recurring entries always pinned at top (independent of month filter)
+  const recurring = expenses.filter((e) => e.is_recurring)
+  // Regular entries respect the month filter, newest first (query already sorts desc)
+  const regular = filtered.filter((e) => !e.is_recurring)
+  const regularTotal = regular.reduce((s, e) => s + Number(e.amount), 0)
   const monthTotal = filtered.reduce((s, e) => s + Number(e.amount), 0)
+
+  const totalPages = Math.max(1, Math.ceil(regular.length / PAGE_SIZE))
+  const pageSafe = Math.min(page, totalPages)
+  const pagedRegular = regular.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE)
+
+  // ── KPI totals (always based on today, independent of the month filter) ──
+  const ranges = periodRanges(new Date())
+  const sumRange = ([start, end]) =>
+    expenses.reduce((s, e) => (e.date >= start && e.date <= end ? s + Number(e.amount) : s), 0)
+  const kpiWeek    = sumRange(ranges.week)
+  const kpiMonth   = sumRange(ranges.month)
+  const kpiQuarter = sumRange(ranges.quarter)
 
   // ── Expense CRUD ─────────────────────────────────────────
   function set(field, value) { setForm((f) => ({ ...f, [field]: value })) }
@@ -72,7 +117,13 @@ export default function Expenses() {
   }
 
   function openEdit(e) {
-    setForm({ date: e.date, description: e.description, amount: e.amount, category: e.category ?? '' })
+    setForm({
+      date: e.date,
+      description: e.description,
+      amount: e.amount,
+      category: e.category ?? '',
+      is_recurring: e.is_recurring ?? false,
+    })
     setEditId(e.id)
     setError('')
     setModalOpen(true)
@@ -89,6 +140,7 @@ export default function Expenses() {
       description: form.description.trim(),
       amount: Number(form.amount),
       category: form.category || null,
+      is_recurring: form.is_recurring,
     }
     let err
     if (editId) {
@@ -141,6 +193,13 @@ export default function Expenses() {
         </button>
       </div>
 
+      {/* KPI cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <KpiCard label="This Week" sublabel={`${ranges.week[0]} → ${ranges.week[1]}`} value={kpiWeek} accent="blue" />
+        <KpiCard label="This Month" sublabel={ranges.month[0].slice(0, 7)} value={kpiMonth} accent="indigo" />
+        <KpiCard label="This Quarter" sublabel={`Q${Math.floor(new Date().getMonth() / 3) + 1} ${new Date().getFullYear()}`} value={kpiQuarter} accent="teal" />
+      </div>
+
       {/* Month filter + total */}
       <div className="flex items-center gap-3 mb-5">
         <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">Month</label>
@@ -160,49 +219,84 @@ export default function Expenses() {
 
       {loading ? (
         <p className="text-sm text-gray-400 text-center py-12">Loading…</p>
-      ) : filtered.length === 0 ? (
-        <p className="text-sm text-gray-400 text-center py-12">No expenses found.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
-              <tr>
-                <th className="text-left px-5 py-3">Date</th>
-                <th className="text-left px-5 py-3">Description</th>
-                <th className="text-left px-5 py-3">Category</th>
-                <th className="text-right px-5 py-3">Amount</th>
-                <th className="px-5 py-3"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-100">
-              {filtered.map((e) => (
-                <tr key={e.id} className="hover:bg-gray-50">
-                  <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{e.date}</td>
-                  <td className="px-5 py-3 text-gray-800">{e.description}</td>
-                  <td className="px-5 py-3">
-                    {e.category
-                      ? <span className="inline-block bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">{e.category}</span>
-                      : <span className="text-gray-400">—</span>}
-                  </td>
-                  <td className="px-5 py-3 text-right font-medium text-gray-800">₱{fmt(e.amount)}</td>
-                  <td className="px-5 py-3 text-right whitespace-nowrap">
-                    <button onClick={() => openEdit(e)} className="text-blue-600 hover:underline text-xs mr-3">Edit</button>
-                    <button onClick={() => setDeleteTarget(e)} className="text-red-500 hover:underline text-xs">Delete</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot className="border-t border-gray-200 bg-gray-50">
-              <tr>
-                <td colSpan={3} className="px-5 py-3 text-right text-xs uppercase text-gray-500 tracking-wide font-semibold">
-                  {monthFilter === 'All' ? 'Grand Total' : 'Month Total'}
-                </td>
-                <td className="px-5 py-3 text-right font-bold text-gray-800">₱{fmt(monthTotal)}</td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
-        </div>
+        <>
+          {/* ── Recurring (pinned) ── */}
+          {recurring.length > 0 && (
+            <div className="mb-6 overflow-hidden rounded-lg border border-amber-200 bg-amber-50/40">
+              <div className="px-5 py-2.5 bg-amber-50 border-b border-amber-200 flex items-center gap-2">
+                <span className="text-amber-600">🔁</span>
+                <span className="text-xs font-semibold uppercase tracking-wide text-amber-700">Recurring</span>
+              </div>
+              <table className="w-full text-sm">
+                <tbody className="divide-y divide-amber-100">
+                  {recurring.map((e) => (
+                    <ExpenseRow key={e.id} e={e} onEdit={openEdit} onDelete={setDeleteTarget} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* ── Regular (paginated) ── */}
+          {regular.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-12">No expenses found.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
+                  <tr>
+                    <th className="text-left px-5 py-3">Date</th>
+                    <th className="text-left px-5 py-3">Description</th>
+                    <th className="text-left px-5 py-3">Category</th>
+                    <th className="text-right px-5 py-3">Amount</th>
+                    <th className="px-5 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {pagedRegular.map((e) => (
+                    <ExpenseRow key={e.id} e={e} onEdit={openEdit} onDelete={setDeleteTarget} />
+                  ))}
+                </tbody>
+                <tfoot className="border-t border-gray-200 bg-gray-50">
+                  <tr>
+                    <td colSpan={3} className="px-5 py-3 text-right text-xs uppercase text-gray-500 tracking-wide font-semibold">
+                      {monthFilter === 'All' ? 'Grand Total' : 'Month Total'}
+                    </td>
+                    <td className="px-5 py-3 text-right font-bold text-gray-800">₱{fmt(regularTotal)}</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 text-sm">
+                  <span className="text-gray-400 text-xs">
+                    Showing {(pageSafe - 1) * PAGE_SIZE + 1}–{Math.min(pageSafe * PAGE_SIZE, regular.length)} of {regular.length}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={pageSafe <= 1}
+                      className="px-3 py-1 rounded-lg border border-gray-200 text-gray-600 disabled:opacity-40 hover:bg-gray-50"
+                    >
+                      ←
+                    </button>
+                    <span className="px-2 text-gray-500 text-xs">Page {pageSafe} / {totalPages}</span>
+                    <button
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={pageSafe >= totalPages}
+                      className="px-3 py-1 rounded-lg border border-gray-200 text-gray-600 disabled:opacity-40 hover:bg-gray-50"
+                    >
+                      →
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
 
       {/* ── Add / Edit Modal ── */}
@@ -267,6 +361,17 @@ export default function Expenses() {
                   {categories.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
                 </select>
               </div>
+
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={form.is_recurring}
+                  onChange={(e) => set('is_recurring', e.target.checked)}
+                  className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="text-sm text-gray-700">Recurring expense</span>
+                <span className="text-[11px] text-gray-400">(pinned at top of the list)</span>
+              </label>
 
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
@@ -367,6 +472,41 @@ export default function Expenses() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+const ACCENTS = {
+  blue:   'border-blue-200 bg-blue-50',
+  indigo: 'border-indigo-200 bg-indigo-50',
+  teal:   'border-teal-200 bg-teal-50',
+}
+
+function ExpenseRow({ e, onEdit, onDelete }) {
+  return (
+    <tr className="hover:bg-gray-50">
+      <td className="px-5 py-3 text-gray-600 whitespace-nowrap">{e.date}</td>
+      <td className="px-5 py-3 text-gray-800">{e.description}</td>
+      <td className="px-5 py-3">
+        {e.category
+          ? <span className="inline-block bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full">{e.category}</span>
+          : <span className="text-gray-400">—</span>}
+      </td>
+      <td className="px-5 py-3 text-right font-medium text-gray-800">₱{fmt(e.amount)}</td>
+      <td className="px-5 py-3 text-right whitespace-nowrap">
+        <button onClick={() => onEdit(e)} className="text-blue-600 hover:underline text-xs mr-3">Edit</button>
+        <button onClick={() => onDelete(e)} className="text-red-500 hover:underline text-xs">Delete</button>
+      </td>
+    </tr>
+  )
+}
+
+function KpiCard({ label, sublabel, value, accent }) {
+  return (
+    <div className={`rounded-xl border px-5 py-4 ${ACCENTS[accent] ?? 'border-gray-200 bg-white'}`}>
+      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{label}</p>
+      <p className="text-2xl font-bold text-gray-800 mt-1">₱{fmt(value)}</p>
+      <p className="text-[11px] text-gray-400 mt-0.5">{sublabel}</p>
     </div>
   )
 }

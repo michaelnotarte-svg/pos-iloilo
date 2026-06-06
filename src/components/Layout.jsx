@@ -1,12 +1,12 @@
 import { NavLink, Outlet } from 'react-router-dom'
 
 const NAV = [
-  { to: '/invoices',   label: 'Invoices',        icon: '🧾' },
-  { to: '/inventory',  label: 'Purchase Orders',  icon: '📦' },
-  { to: '/customers',  label: 'Customers',        icon: '👥' },
-  { to: '/items',      label: 'Items',            icon: '🥩' },
-  { to: '/expenses',         label: 'Expenses',   icon: '💸' },
-  { to: '/inventory-current', label: 'Inventory',  icon: '🏬' },
+  { to: '/invoices',   label: 'Invoices',   icon: '🧾' },
+  { to: '/stocks',     label: 'Stocks',     icon: '📦' },
+  { to: '/inventory',  label: 'Inventory',  icon: '🏬' },
+  { to: '/customers',  label: 'Customers',  icon: '👥' },
+  { to: '/items',      label: 'Items',      icon: '🥩' },
+  { to: '/expenses',   label: 'Expenses',   icon: '💸' },
 ]
 
 export default function Layout() {

@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 
 const EMPTY_FORM = {
   business_name: '',
+  display_name: '',
   owner_name: '',
   address: '',
   contact: '',
@@ -38,6 +39,7 @@ export default function Customers() {
     const q = search.toLowerCase()
     return (
       c.business_name?.toLowerCase().includes(q) ||
+      c.display_name?.toLowerCase().includes(q) ||
       c.owner_name?.toLowerCase().includes(q) ||
       c.contact?.toLowerCase().includes(q)
     )
@@ -53,6 +55,7 @@ export default function Customers() {
   function openEdit(c) {
     setForm({
       business_name: c.business_name ?? '',
+      display_name: c.display_name ?? '',
       owner_name: c.owner_name ?? '',
       address: c.address ?? '',
       contact: c.contact ?? '',
@@ -73,6 +76,7 @@ export default function Customers() {
     setError('')
     const payload = {
       business_name: form.business_name.trim(),
+      display_name: form.display_name.trim() || null,
       owner_name: form.owner_name.trim() || null,
       address: form.address.trim() || null,
       contact: form.contact.trim() || null,
@@ -129,6 +133,7 @@ export default function Customers() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
               <tr>
+                <th className="text-left px-4 py-3">Display Name</th>
                 <th className="text-left px-4 py-3">Business Name</th>
                 <th className="text-left px-4 py-3">Owner</th>
                 <th className="text-left px-4 py-3">Contact</th>
@@ -139,7 +144,8 @@ export default function Customers() {
             <tbody className="divide-y divide-gray-100 bg-white">
               {filtered.map((c) => (
                 <tr key={c.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-gray-800">{c.business_name}</td>
+                  <td className="px-4 py-3 font-medium text-gray-800">{c.display_name || c.business_name}</td>
+                  <td className="px-4 py-3 text-gray-600">{c.business_name}</td>
                   <td className="px-4 py-3 text-gray-600">{c.owner_name ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-600">{c.contact ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-600 max-w-xs truncate">{c.address ?? '—'}</td>
@@ -175,6 +181,10 @@ export default function Customers() {
             <form onSubmit={handleSave} className="px-6 py-4 space-y-3">
               {error && <p className="text-red-500 text-xs">{error}</p>}
               <Field label="Business Name *" value={form.business_name} onChange={(v) => setForm({ ...form, business_name: v })} />
+              <div>
+                <Field label="Display Name" value={form.display_name} onChange={(v) => setForm({ ...form, display_name: v })} />
+                <p className="text-[11px] text-gray-400 mt-1">Shown throughout the app. Defaults to Business Name if left blank.</p>
+              </div>
               <Field label="Owner Name" value={form.owner_name} onChange={(v) => setForm({ ...form, owner_name: v })} />
               <Field label="Contact" value={form.contact} onChange={(v) => setForm({ ...form, contact: v })} />
               <Field label="Address" value={form.address} onChange={(v) => setForm({ ...form, address: v })} />

@@ -1,10 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { fetchListNames, STORAGE_FALLBACK } from '../lib/lists'
+import ManageListModal from '../components/ManageListModal'
 
 const EMPTY_FORM = {
   po_number: '',
   date: new Date().toISOString().slice(0, 10),
+  storage: 'Everest',
   supplier: '',
   source: '',
   category: '',
@@ -20,8 +23,21 @@ export default function PurchaseOrders() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [storageOptions, setStorageOptions] = useState(STORAGE_FALLBACK)
+  const [categoryOptions, setCategoryOptions] = useState([])
+  const [supplierOptions, setSupplierOptions] = useState([])
+  const [sourceOptions, setSourceOptions] = useState([])
+  const [manageList, setManageList] = useState(null) // list_type | null
 
-  useEffect(() => { fetchOrders() }, [])
+  useEffect(() => { fetchOrders(); loadLists() }, [])
+
+  async function loadLists() {
+    setStorageOptions(await fetchListNames('storage', STORAGE_FALLBACK))
+    setCategoryOptions(await fetchListNames('delivery_category', []))
+    setSupplierOptions(await fetchListNames('supplier', []))
+    setSourceOptions(await fetchListNames('source', []))
+  }
+  const loadStorage = loadLists
 
   async function fetchOrders() {
     setLoading(true)
@@ -66,13 +82,13 @@ export default function PurchaseOrders() {
 
   async function handleSave(e) {
     e.preventDefault()
-    if (!form.po_number.trim()) { setError('PO # is required.'); return }
     if (!form.date) { setError('Date is required.'); return }
     setSaving(true)
     setError('')
     const payload = {
-      po_number: form.po_number.trim(),
+      po_number: form.po_number.trim() || null,
       date: form.date,
+      storage: form.storage,
       supplier: form.supplier.trim() || null,
       source: form.source.trim() || null,
       category: form.category.trim() || null,
@@ -86,24 +102,24 @@ export default function PurchaseOrders() {
     setSaving(false)
     if (err) { setError(err.message); return }
     setModalOpen(false)
-    navigate(`/inventory/${data.id}`)
+    navigate(`/stocks/${data.id}`)
   }
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-gray-800">Purchase Orders</h1>
+        <h1 className="text-2xl font-semibold text-gray-800">Stocks</h1>
         <button
           onClick={openAdd}
           className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg"
         >
-          + New PO
+          + New Delivery
         </button>
       </div>
 
       <input
         type="text"
-        placeholder="Search by PO #, supplier, source, category…"
+        placeholder="Search by ref #, supplier, source, category…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -112,35 +128,35 @@ export default function PurchaseOrders() {
       {loading ? (
         <p className="text-sm text-gray-400 text-center py-12">Loading…</p>
       ) : filtered.length === 0 ? (
-        <p className="text-sm text-gray-400 text-center py-12">No purchase orders yet.</p>
+        <p className="text-sm text-gray-400 text-center py-12">No stock deliveries yet.</p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-gray-200">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
               <tr>
-                <th className="text-left px-4 py-3">PO #</th>
                 <th className="text-left px-4 py-3">Date</th>
-                <th className="text-left px-4 py-3">Supplier</th>
+                <th className="text-left px-4 py-3">Source</th>
                 <th className="text-right px-4 py-3"># Items</th>
                 <th className="text-right px-4 py-3">Total Boxes</th>
                 <th className="text-right px-4 py-3">Total Kilos</th>
                 <th className="text-left px-4 py-3">Items</th>
+                <th className="text-left px-4 py-3">Ref #</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 bg-white">
               {filtered.map((o) => (
                 <tr
                   key={o.id}
-                  onClick={() => navigate(`/inventory/${o.id}`)}
+                  onClick={() => navigate(`/stocks/${o.id}`)}
                   className="hover:bg-blue-50 cursor-pointer"
                 >
-                  <td className="px-4 py-3 font-medium text-blue-700">{o.po_number}</td>
-                  <td className="px-4 py-3 text-gray-600">{o.date}</td>
-                  <td className="px-4 py-3 text-gray-600">{o.supplier ?? '—'}</td>
+                  <td className="px-4 py-3 font-medium text-gray-700">{o.date}</td>
+                  <td className="px-4 py-3 text-gray-600">{o.source ?? '—'}</td>
                   <td className="px-4 py-3 text-right text-gray-600">{o.lineCount}</td>
                   <td className="px-4 py-3 text-right text-gray-600">{o.totalBoxes > 0 ? o.totalBoxes.toLocaleString() : '—'}</td>
                   <td className="px-4 py-3 text-right text-gray-600">{o.totalKilos > 0 ? o.totalKilos.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 }) : '—'}</td>
                   <td className="px-4 py-3 text-gray-500 max-w-xs truncate" title={o.itemList}>{o.itemList || '—'}</td>
+                  <td className="px-4 py-3 text-gray-400">{o.po_number || '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -153,13 +169,12 @@ export default function PurchaseOrders() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="font-semibold text-gray-800">New Purchase Order</h2>
+              <h2 className="font-semibold text-gray-800">New Stock Delivery</h2>
               <button onClick={() => setModalOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
             </div>
             <form onSubmit={handleSave} className="px-6 py-4 space-y-3">
               {error && <p className="text-red-500 text-xs">{error}</p>}
               <div className="grid grid-cols-2 gap-3">
-                <Field label="PO # *" value={form.po_number} onChange={(v) => set('po_number', v)} />
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Date *</label>
                   <input
@@ -169,12 +184,25 @@ export default function PurchaseOrders() {
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-medium text-gray-600">Storage *</label>
+                    <button type="button" onClick={() => setManageList('storage')} className="text-[11px] text-blue-600 hover:underline">Manage</button>
+                  </div>
+                  <select
+                    value={form.storage}
+                    onChange={(e) => set('storage', e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {storageOptions.map((s) => <option key={s}>{s}</option>)}
+                  </select>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Supplier" value={form.supplier} onChange={(v) => set('supplier', v)} />
-                <Field label="Source" value={form.source} onChange={(v) => set('source', v)} />
+                <ManagedSelect label="Source" value={form.source} onChange={(v) => set('source', v)} options={sourceOptions} onManage={() => setManageList('source')} />
+                <ManagedSelect label="Supplier" value={form.supplier} onChange={(v) => set('supplier', v)} options={supplierOptions} onManage={() => setManageList('supplier')} />
               </div>
-              <Field label="Category" value={form.category} onChange={(v) => set('category', v)} />
+              <ManagedSelect label="Category" value={form.category} onChange={(v) => set('category', v)} options={categoryOptions} onManage={() => setManageList('delivery_category')} />
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
                 <textarea
@@ -184,6 +212,7 @@ export default function PurchaseOrders() {
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+              <Field label="Ref # (optional)" value={form.po_number} onChange={(v) => set('po_number', v)} />
               <div className="flex justify-end gap-2 pt-2">
                 <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
                   Cancel
@@ -200,6 +229,42 @@ export default function PurchaseOrders() {
           </div>
         </div>
       )}
+
+      {manageList && (
+        <ManageListModal
+          listType={manageList}
+          title={LIST_TITLES[manageList] ?? 'Manage List'}
+          onClose={() => setManageList(null)}
+          onChange={loadLists}
+        />
+      )}
+    </div>
+  )
+}
+
+const LIST_TITLES = {
+  storage: 'Manage Storage Locations',
+  source: 'Manage Sources',
+  supplier: 'Manage Suppliers',
+  delivery_category: 'Manage Categories',
+}
+
+function ManagedSelect({ label, value, onChange, options, onManage }) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <label className="block text-xs font-medium text-gray-600">{label}</label>
+        <button type="button" onClick={onManage} className="text-[11px] text-blue-600 hover:underline">Manage</button>
+      </div>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
+        <option value="">— None —</option>
+        {options.map((o) => <option key={o}>{o}</option>)}
+        {value && !options.includes(value) && <option>{value}</option>}
+      </select>
     </div>
   )
 }

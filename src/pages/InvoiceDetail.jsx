@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { fetchListNames, STORAGE_FALLBACK, PAYMENT_FALLBACK } from '../lib/lists'
+import ManageListModal from '../components/ManageListModal'
 
 const SALE_TYPES = ['Walk-in', 'Delivery', 'Out-of-Town']
 const STATUSES = ['Unpaid', 'Partial', 'Paid']
-const PAYMENT_MODES = ['Cash', 'A.R.', 'Check', 'Bank Transfer', 'Bank Deposit', 'GCash']
-const STORAGE_OPTIONS = ['Everest', 'FishingPort']
 
 const STATUS_STYLE = {
   Paid: 'bg-green-100 text-green-700',
@@ -68,16 +68,25 @@ export default function InvoiceDetail() {
 
   const [deleteInvConfirm, setDeleteInvConfirm] = useState(false)
 
-  useEffect(() => { fetchAll() }, [id])
+  const [storageOptions, setStorageOptions] = useState(STORAGE_FALLBACK)
+  const [paymentOptions, setPaymentOptions] = useState(PAYMENT_FALLBACK)
+  const [manageList, setManageList] = useState(null) // 'storage' | 'payment_method' | null
+
+  useEffect(() => { fetchAll(); loadLists() }, [id])
+
+  async function loadLists() {
+    setStorageOptions(await fetchListNames('storage', STORAGE_FALLBACK))
+    setPaymentOptions(await fetchListNames('payment_method', PAYMENT_FALLBACK))
+  }
 
   async function fetchAll() {
     setLoading(true)
     const [{ data: invData }, { data: linesData }, { data: paymentsData }, { data: custData }, { data: itemsData }] =
       await Promise.all([
-        supabase.from('invoices').select('*, customers(business_name)').eq('id', id).single(),
+        supabase.from('invoices').select('*, customers(business_name, display_name)').eq('id', id).single(),
         supabase.from('invoice_lines').select('*, items(name)').eq('invoice_id', id).order('created_at'),
         supabase.from('partial_payments').select('*').eq('invoice_id', id).order('date_paid'),
-        supabase.from('customers').select('id, business_name').order('business_name'),
+        supabase.from('customers').select('id, business_name, display_name').order('business_name'),
         supabase.from('items').select('id, name').order('name'),
       ])
     setInv(invData)
@@ -280,7 +289,7 @@ export default function InvoiceDetail() {
               <select value={headerForm.customer_id} onChange={(e) => setHeaderForm({ ...headerForm, customer_id: e.target.value })}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">— Walk-in —</option>
-                {customers.map((c) => <option key={c.id} value={c.id}>{c.business_name}</option>)}
+                {customers.map((c) => <option key={c.id} value={c.id}>{c.display_name || c.business_name}</option>)}
               </select>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -309,7 +318,7 @@ export default function InvoiceDetail() {
         ) : (
           <div className="px-6 py-4 grid grid-cols-2 sm:grid-cols-4 gap-x-8 gap-y-3 text-sm">
             <InfoRow label="Date" value={inv.date} />
-            <InfoRow label="Customer" value={inv.customers?.business_name ?? 'Walk-in'} />
+            <InfoRow label="Customer" value={inv.customers ? (inv.customers.display_name || inv.customers.business_name) : 'Walk-in'} />
             <InfoRow label="Sale Type" value={inv.sale_type} />
             <InfoRow label="Status" value={inv.status} />
           </div>
@@ -444,10 +453,13 @@ export default function InvoiceDetail() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Storage *</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-gray-600">Storage *</label>
+                  <button type="button" onClick={() => setManageList('storage')} className="text-[11px] text-blue-600 hover:underline">Manage</button>
+                </div>
                 <select value={lineForm.storage} onChange={(e) => setLineForm({ ...lineForm, storage: e.target.value })}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  {STORAGE_OPTIONS.map((s) => <option key={s}>{s}</option>)}
+                  {storageOptions.map((s) => <option key={s}>{s}</option>)}
                 </select>
               </div>
               <F label="Batch # *" value={lineForm.batch_number} onChange={(v) => setLineForm({ ...lineForm, batch_number: v })} />
@@ -481,10 +493,13 @@ export default function InvoiceDetail() {
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Mode of Payment</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-medium text-gray-600">Mode of Payment</label>
+                <button type="button" onClick={() => setManageList('payment_method')} className="text-[11px] text-blue-600 hover:underline">Manage</button>
+              </div>
               <select value={payForm.mode_of_payment} onChange={(e) => setPayForm({ ...payForm, mode_of_payment: e.target.value })}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                {PAYMENT_MODES.map((m) => <option key={m}>{m}</option>)}
+                {paymentOptions.map((m) => <option key={m}>{m}</option>)}
               </select>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -524,6 +539,15 @@ export default function InvoiceDetail() {
           onCancel={() => setDeleteInvConfirm(false)}
           onConfirm={deleteInvoice}
           destructive
+        />
+      )}
+
+      {manageList && (
+        <ManageListModal
+          listType={manageList}
+          title={manageList === 'storage' ? 'Manage Storage Locations' : 'Manage Payment Methods'}
+          onClose={() => setManageList(null)}
+          onChange={loadLists}
         />
       )}
     </div>
