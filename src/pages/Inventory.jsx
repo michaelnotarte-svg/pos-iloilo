@@ -4,16 +4,19 @@ import { fetchListNames, STORAGE_FALLBACK } from '../lib/lists'
 import ManageListModal from '../components/ManageListModal'
 import { getAdminMode } from '../lib/settings'
 import { downloadCSV } from '../lib/csv'
+import { fetchMovements } from '../lib/inventory'
 
 const num = (x) => Number(x) || 0
 const kg = (n) => Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const bx = (n) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })
 
 const TYPE_STYLE = {
-  'Opening':    'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
-  'Stock Dump': 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300',
-  'Sale':       'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300',
-  'Adjustment': 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
+  'Opening':      'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300',
+  'Stock Dump':   'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300',
+  'Sale':         'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300',
+  'Adjustment':   'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
+  'Transfer In':  'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300',
+  'Transfer Out': 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300',
 }
 
 const PAGE_SIZE = 25
@@ -52,32 +55,33 @@ export default function Inventory() {
   const [adjError, setAdjError] = useState('')
 
   const [manageStorage, setManageStorage] = useState(false)
+  const [overrides, setOverrides] = useState([])
   const isAdmin = getAdminMode()
 
-  useEffect(() => { fetchAll() }, [])
+  useEffect(() => { fetchAll(); loadOverrides() }, [])
+
+  async function loadOverrides() {
+    const { data } = await supabase
+      .from('oversell_overrides')
+      .select('*')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+    setOverrides(data ?? [])
+  }
+
+  async function approveOverride(idv) {
+    await supabase.from('oversell_overrides').update({ status: 'approved', approved_at: new Date().toISOString() }).eq('id', idv)
+    loadOverrides()
+  }
 
   async function fetchAll() {
     setLoading(true)
-    const [arch, stock, sales, adj, itemRes, storages] = await Promise.all([
-      supabase.from('inventory_archive').select('snapshot_date, item_id, batch_number, storage, boxes, kilos, items(name)'),
-      supabase.from('stock_entries').select('date, item_id, batch_number, storage, boxes, kilos, items(name)'),
-      supabase.from('invoice_lines').select('item_id, batch_number, storage, boxes, kilos, items(name), invoices(date)'),
-      supabase.from('inventory_adjustments').select('date, item_id, batch_number, storage, boxes, kilos, items(name)'),
+    const [valid, itemRes, storages] = await Promise.all([
+      fetchMovements(),
       supabase.from('items').select('id, name').order('name'),
       fetchListNames('storage', STORAGE_FALLBACK),
     ])
 
-    const m = []
-    for (const r of arch.data ?? [])
-      m.push({ date: r.snapshot_date, item_id: r.item_id, item: r.items?.name ?? '—', batch: r.batch_number ?? '—', storage: r.storage, boxes: num(r.boxes), kilos: num(r.kilos), type: 'Opening' })
-    for (const r of stock.data ?? [])
-      m.push({ date: r.date, item_id: r.item_id, item: r.items?.name ?? '—', batch: r.batch_number ?? '—', storage: r.storage, boxes: num(r.boxes), kilos: num(r.kilos), type: 'Stock Dump' })
-    for (const r of sales.data ?? [])
-      m.push({ date: r.invoices?.date, item_id: r.item_id, item: r.items?.name ?? '—', batch: r.batch_number ?? '—', storage: r.storage, boxes: -num(r.boxes), kilos: -num(r.kilos), type: 'Sale' })
-    for (const r of adj.data ?? [])
-      m.push({ date: r.date, item_id: r.item_id, item: r.items?.name ?? '—', batch: r.batch_number ?? '—', storage: r.storage, boxes: num(r.boxes), kilos: num(r.kilos), type: 'Adjustment' })
-
-    const valid = m.filter((x) => x.date)
     setMoves(valid)
     setItems(itemRes.data ?? [])
     setStorageOptions(storages)
@@ -205,6 +209,44 @@ export default function Inventory() {
           )}
         </div>
       </div>
+
+      {/* Pending oversell overrides (admin only) */}
+      {isAdmin && overrides.length > 0 && (
+        <div className="mb-5 rounded-xl border border-amber-300 dark:border-amber-500/40 bg-amber-50 dark:bg-amber-500/10 overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-amber-200 dark:border-amber-500/30 flex items-center gap-2">
+            <span className="text-amber-600 dark:text-amber-400">⚠</span>
+            <span className="text-sm font-semibold text-amber-800 dark:text-amber-300">Pending Oversell Approvals ({overrides.length})</span>
+          </div>
+          <table className="w-full text-sm">
+            <thead className="text-amber-700/70 dark:text-amber-300/70 text-xs uppercase">
+              <tr>
+                <th className="text-left px-4 py-2">Date</th>
+                <th className="text-left px-4 py-2">Invoice</th>
+                <th className="text-left px-4 py-2">Item</th>
+                <th className="text-left px-4 py-2">Storage</th>
+                <th className="text-right px-4 py-2">Requested</th>
+                <th className="text-right px-4 py-2">Available</th>
+                <th className="px-4 py-2"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-amber-200/60 dark:divide-amber-500/20">
+              {overrides.map((o) => (
+                <tr key={o.id}>
+                  <td className="px-4 py-2 text-gray-600 dark:text-gray-300 whitespace-nowrap">{o.date}</td>
+                  <td className="px-4 py-2 text-gray-700 dark:text-gray-200">{o.invoice_number ?? '—'}</td>
+                  <td className="px-4 py-2 text-gray-800 dark:text-gray-100">{o.item_name}</td>
+                  <td className="px-4 py-2 text-gray-600 dark:text-gray-300">{o.storage}</td>
+                  <td className="px-4 py-2 text-right text-red-600 dark:text-red-400">{kg(o.requested_kilos)} kg</td>
+                  <td className="px-4 py-2 text-right text-gray-600 dark:text-gray-300">{kg(o.available_kilos)} kg</td>
+                  <td className="px-4 py-2 text-right">
+                    <button onClick={() => approveOverride(o.id)} className="text-xs bg-amber-600 hover:bg-amber-700 text-white font-medium px-3 py-1 rounded-lg">Approve</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Controls */}
       <div className="flex flex-wrap items-center gap-3 mb-5">

@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { money } from '../lib/settings'
 import { fetchListNames, STORAGE_FALLBACK, PAYMENT_FALLBACK } from '../lib/lists'
 import ManageListModal from '../components/ManageListModal'
+import { fetchMovements, onHandMap, lookup, inStockItemIds, avgKgBox } from '../lib/inventory'
 
 const SALE_TYPES = ['Walk-in', 'Delivery', 'Out-of-Town']
 const STATUSES = ['Unpaid', 'Partial', 'Paid']
@@ -73,12 +74,26 @@ export default function InvoiceDetail() {
   const [paymentOptions, setPaymentOptions] = useState(PAYMENT_FALLBACK)
   const [manageList, setManageList] = useState(null) // 'storage' | 'payment_method' | null
 
-  useEffect(() => { fetchAll(); loadLists() }, [id])
+  const [invMap, setInvMap] = useState(new Map())
+  const [showAllItems, setShowAllItems] = useState(false)
+  const [oversell, setOversell] = useState(null) // { payload, requested, available } | null
+
+  useEffect(() => { fetchAll(); loadLists(); loadInventory() }, [id])
 
   async function loadLists() {
     setStorageOptions(await fetchListNames('storage', STORAGE_FALLBACK))
     setPaymentOptions(await fetchListNames('payment_method', PAYMENT_FALLBACK))
   }
+
+  async function loadInventory() {
+    setInvMap(onHandMap(await fetchMovements()))
+  }
+
+  const lineAvail = lookup(invMap, lineForm.item_id, lineForm.storage)
+  const inStock = inStockItemIds(invMap, lineForm.storage)
+  const itemsForDropdown = items.filter(
+    (i) => showAllItems || inStock.has(i.id) || i.id === lineForm.item_id
+  )
 
   async function fetchAll() {
     setLoading(true)
@@ -143,13 +158,12 @@ export default function InvoiceDetail() {
     setLineModal(true)
   }
 
-  async function saveLine(e) {
+  function saveLine(e) {
     e.preventDefault()
     if (!lineForm.item_id) { setLineError('Select an item.'); return }
     if (!lineForm.batch_number.trim()) { setLineError('Batch # is required.'); return }
     if (!lineForm.unit_price || !lineForm.kilos) { setLineError('Unit price and kilos are required.'); return }
-    setSavingLine(true)
-    setLineError('')
+
     const payload = {
       invoice_id: id,
       item_id: lineForm.item_id,
@@ -159,16 +173,48 @@ export default function InvoiceDetail() {
       boxes: lineForm.boxes ? Number(lineForm.boxes) : null,
       kilos: Number(lineForm.kilos),
     }
+
+    // Over-sell guard (against on-hand at the chosen warehouse)
+    const avail = lookup(invMap, lineForm.item_id, lineForm.storage)
+    const reqKilos = Number(lineForm.kilos)
+    const reqBoxes = lineForm.boxes ? Number(lineForm.boxes) : 0
+    if (reqKilos > avail.kilos + 1e-9 || reqBoxes > avail.boxes + 1e-9) {
+      setOversell({ payload, requested: { kilos: reqKilos, boxes: reqBoxes }, available: avail })
+      return
+    }
+    doSaveLine(payload, false)
+  }
+
+  async function doSaveLine(payload, isOverride) {
+    setSavingLine(true)
+    setLineError('')
     let err
     if (editLineId) {
       ;({ error: err } = await supabase.from('invoice_lines').update(payload).eq('id', editLineId))
     } else {
       ;({ error: err } = await supabase.from('invoice_lines').insert(payload))
     }
+    if (!err && isOverride) {
+      const itemName = items.find((i) => i.id === payload.item_id)?.name ?? ''
+      const avail = lookup(invMap, payload.item_id, payload.storage)
+      await supabase.from('oversell_overrides').insert({
+        invoice_id: id,
+        invoice_number: inv?.invoice_number ?? null,
+        item_id: payload.item_id,
+        item_name: itemName,
+        storage: payload.storage,
+        requested_kilos: payload.kilos,
+        available_kilos: avail.kilos,
+        requested_boxes: payload.boxes,
+        available_boxes: avail.boxes,
+      })
+    }
     setSavingLine(false)
-    if (err) { setLineError(err.message); return }
+    if (err) { setLineError(err.message); setOversell(null); return }
+    setOversell(null)
     setLineModal(false)
     fetchAll()
+    loadInventory()
   }
 
   async function deleteLine() {
@@ -445,12 +491,24 @@ export default function InvoiceDetail() {
           <form onSubmit={saveLine} className="space-y-3">
             {lineError && <p className="text-red-500 text-xs">{lineError}</p>}
             <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Item *</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">Item *</label>
+                <label className="flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400 cursor-pointer">
+                  <input type="checkbox" checked={showAllItems} onChange={(e) => setShowAllItems(e.target.checked)} className="h-3 w-3 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500" />
+                  Show all items
+                </label>
+              </div>
               <select value={lineForm.item_id} onChange={(e) => setLineForm({ ...lineForm, item_id: e.target.value })}
                 className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">Select item…</option>
-                {items.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
+                {itemsForDropdown.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
               </select>
+              {lineForm.item_id && (
+                <p className={`text-[11px] mt-1 ${lineAvail.kilos <= 0 ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
+                  On hand @ {lineForm.storage}: <span className="font-semibold">{lineAvail.boxes.toLocaleString(undefined, { maximumFractionDigits: 2 })} box</span> · <span className="font-semibold">{lineAvail.kilos.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg</span>
+                  {lineAvail.boxes > 0 && <> · avg {avgKgBox(lineAvail).toLocaleString(undefined, { maximumFractionDigits: 2 })} kg/box</>}
+                </p>
+              )}
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -478,6 +536,28 @@ export default function InvoiceDetail() {
             <ModalActions onCancel={() => setLineModal(false)} saving={savingLine} />
           </form>
         </Modal>
+      )}
+
+      {/* ── Oversell override confirmation ── */}
+      {oversell && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60]">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
+            <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-2">⚠ Not enough stock</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+              Selling <span className="font-medium text-gray-700 dark:text-gray-200">{oversell.requested.kilos.toLocaleString(undefined, { maximumFractionDigits: 2 })} kg</span>
+              {oversell.requested.boxes ? <> / {oversell.requested.boxes} box</> : null} but only{' '}
+              <span className="font-medium text-gray-700 dark:text-gray-200">{oversell.available.kilos.toLocaleString(undefined, { maximumFractionDigits: 2 })} kg</span>
+              {' '}/ {oversell.available.boxes.toLocaleString(undefined, { maximumFractionDigits: 2 })} box on hand at {oversell.payload.storage}.
+            </p>
+            <p className="text-xs text-amber-600 dark:text-amber-400 mb-4">This override will be logged for admin approval.</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setOversell(null)} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800">Cancel</button>
+              <button onClick={() => doSaveLine(oversell.payload, true)} disabled={savingLine} className="bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg">
+                {savingLine ? 'Saving…' : 'Override & Save'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Payment Modal ── */}

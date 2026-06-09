@@ -8,6 +8,7 @@ const EMPTY_FORM = {
   po_number: '',
   date: new Date().toISOString().slice(0, 10),
   storage: 'Everest',
+  from_storage: '',
   supplier: '',
   source: '',
   category: '',
@@ -83,14 +84,20 @@ export default function PurchaseOrders() {
   async function handleSave(e) {
     e.preventDefault()
     if (!form.date) { setError('Date is required.'); return }
+    const isTransfer = form.category === 'Transfer'
+    if (isTransfer) {
+      if (!form.from_storage) { setError('From warehouse is required for a transfer.'); return }
+      if (form.from_storage === form.storage) { setError('From and To warehouses must be different.'); return }
+    }
     setSaving(true)
     setError('')
     const payload = {
       po_number: form.po_number.trim() || null,
       date: form.date,
       storage: form.storage,
-      supplier: form.supplier.trim() || null,
-      source: form.source.trim() || null,
+      from_storage: isTransfer ? form.from_storage : null,
+      supplier: isTransfer ? null : (form.supplier.trim() || null),
+      source: isTransfer ? null : (form.source.trim() || null),
       category: form.category.trim() || null,
       notes: form.notes.trim() || null,
     }
@@ -169,11 +176,15 @@ export default function PurchaseOrders() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-lg mx-4">
             <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
-              <h2 className="font-semibold text-gray-800 dark:text-gray-100">New Stock Delivery</h2>
+              <h2 className="font-semibold text-gray-800 dark:text-gray-100">{form.category === 'Transfer' ? 'New Stock Transfer' : 'New Stock Delivery'}</h2>
               <button onClick={() => setModalOpen(false)} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 text-xl leading-none">&times;</button>
             </div>
             <form onSubmit={handleSave} className="px-6 py-4 space-y-3">
               {error && <p className="text-red-500 text-xs">{error}</p>}
+
+              {/* Category first — drives the rest of the form */}
+              <ManagedSelect label="Category" value={form.category} onChange={(v) => set('category', v)} options={categoryOptions} onManage={() => setManageList('delivery_category')} />
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Date *</label>
@@ -186,7 +197,7 @@ export default function PurchaseOrders() {
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">Storage *</label>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">{form.category === 'Transfer' ? 'To Warehouse *' : 'Storage *'}</label>
                     <button type="button" onClick={() => setManageList('storage')} className="text-[11px] text-blue-600 hover:underline">Manage</button>
                   </div>
                   <select
@@ -198,11 +209,26 @@ export default function PurchaseOrders() {
                   </select>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <ManagedSelect label="Source" value={form.source} onChange={(v) => set('source', v)} options={sourceOptions} onManage={() => setManageList('source')} />
-                <ManagedSelect label="Supplier" value={form.supplier} onChange={(v) => set('supplier', v)} options={supplierOptions} onManage={() => setManageList('supplier')} />
-              </div>
-              <ManagedSelect label="Category" value={form.category} onChange={(v) => set('category', v)} options={categoryOptions} onManage={() => setManageList('delivery_category')} />
+
+              {form.category === 'Transfer' ? (
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">From Warehouse *</label>
+                  <select
+                    value={form.from_storage}
+                    onChange={(e) => set('from_storage', e.target.value)}
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select source warehouse…</option>
+                    {storageOptions.map((s) => <option key={s}>{s}</option>)}
+                  </select>
+                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Stock will be deducted from here and added to the destination warehouse.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  <ManagedSelect label="Source" value={form.source} onChange={(v) => set('source', v)} options={sourceOptions} onManage={() => setManageList('source')} />
+                  <ManagedSelect label="Supplier" value={form.supplier} onChange={(v) => set('supplier', v)} options={supplierOptions} onManage={() => setManageList('supplier')} />
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Notes</label>
                 <textarea

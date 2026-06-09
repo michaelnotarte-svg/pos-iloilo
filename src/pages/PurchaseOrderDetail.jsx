@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { fetchListNames, STORAGE_FALLBACK } from '../lib/lists'
 import ManageListModal from '../components/ManageListModal'
+import { fetchMovements, onHandMap, lookup, inStockItemIds, avgKgBox } from '../lib/inventory'
 
 const EMPTY_LINE = {
   item_id: '',
@@ -55,10 +56,18 @@ export default function PurchaseOrderDetail() {
   const [deleteLineTarget, setDeleteLineTarget] = useState(null)
   const [deletePOConfirm, setDeletePOConfirm] = useState(false)
 
+  const [invMap, setInvMap] = useState(new Map())
+  const [showAllItems, setShowAllItems] = useState(false)
+
   useEffect(() => {
     fetchAll()
     loadStorage()
+    loadInventory()
   }, [id])
+
+  async function loadInventory() {
+    setInvMap(onHandMap(await fetchMovements()))
+  }
 
   async function loadStorage() {
     setStorageOptions(await fetchListNames('storage', STORAGE_FALLBACK))
@@ -226,6 +235,15 @@ export default function PurchaseOrderDetail() {
   if (loading) return <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-20">Loading…</p>
   if (!po) return <p className="text-sm text-red-400 text-center py-20">PO not found.</p>
 
+  // Inventory awareness on the line form
+  const isTransfer = !!po.from_storage
+  const availWarehouse = isTransfer ? po.from_storage : lineForm.storage
+  const lineAvail = lookup(invMap, lineForm.item_id, availWarehouse)
+  const inStock = inStockItemIds(invMap, availWarehouse)
+  const comboItems = isTransfer && !showAllItems
+    ? items.filter((i) => inStock.has(i.id) || i.id === lineForm.item_id)
+    : items
+
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       {/* Back */}
@@ -315,9 +333,11 @@ export default function PurchaseOrderDetail() {
         ) : (
           <div className="px-6 py-4 grid grid-cols-2 sm:grid-cols-3 gap-x-8 gap-y-3 text-sm">
             <InfoRow label="Date" value={po.date} />
-            <InfoRow label="Storage" value={po.storage} />
-            <InfoRow label="Source" value={po.source} />
-            <InfoRow label="Supplier" value={po.supplier} />
+            {po.from_storage
+              ? <InfoRow label="Transfer" value={`${po.from_storage} → ${po.storage}`} />
+              : <InfoRow label="Storage" value={po.storage} />}
+            {!po.from_storage && <InfoRow label="Source" value={po.source} />}
+            {!po.from_storage && <InfoRow label="Supplier" value={po.supplier} />}
             <InfoRow label="Category" value={po.category} />
             {po.notes && (
               <div className="col-span-2 sm:col-span-3">
@@ -405,13 +425,27 @@ export default function PurchaseOrderDetail() {
               {lineError && <p className="text-red-500 text-xs">{lineError}</p>}
 
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Item *</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">Item *</label>
+                  {isTransfer && (
+                    <label className="flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400 cursor-pointer">
+                      <input type="checkbox" checked={showAllItems} onChange={(e) => setShowAllItems(e.target.checked)} className="h-3 w-3 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500" />
+                      Show all items
+                    </label>
+                  )}
+                </div>
                 <ItemCombobox
-                  items={items}
+                  items={comboItems}
                   value={lineForm.item_id}
                   onSelect={handleItemChange}
                   onQuickAdd={handleQuickAddItem}
                 />
+                {lineForm.item_id && (
+                  <p className={`text-[11px] mt-1 ${lineAvail.kilos <= 0 ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
+                    On hand @ {availWarehouse}: <span className="font-semibold">{lineAvail.boxes.toLocaleString(undefined, { maximumFractionDigits: 2 })} box</span> · <span className="font-semibold">{lineAvail.kilos.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg</span>
+                    {lineAvail.boxes > 0 && <> · avg {avgKgBox(lineAvail).toLocaleString(undefined, { maximumFractionDigits: 2 })} kg/box</>}
+                  </p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
