@@ -131,8 +131,8 @@ export default function Settings() {
               <BizInput label="Company Name" value={business.name ?? ''} onChange={(v) => bizField('name', v)} />
               <BizInput label="Address" value={business.address ?? ''} onChange={(v) => bizField('address', v)} />
               <div className="grid grid-cols-2 gap-3">
-                <BizInput label="Contact" value={business.contact ?? ''} onChange={(v) => bizField('contact', v)} />
-                <BizInput label="TIN" value={business.tin ?? ''} onChange={(v) => bizField('tin', v)} />
+                <BizInput label="Phone" value={business.phone ?? business.contact ?? ''} onChange={(v) => bizField('phone', v)} />
+                <BizInput label="Email" value={business.email ?? ''} onChange={(v) => bizField('email', v)} />
               </div>
             </div>
           </Section>

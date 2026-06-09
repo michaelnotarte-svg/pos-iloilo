@@ -8,7 +8,8 @@
       "Bash(curl -s http://localhost:5173 -o /dev/null -w \"%{http_code}\")",
       "Bash(npx vite *)",
       "Bash(node sweep.cjs)",
-      "mcp__Claude_Preview__preview_start"
+      "mcp__Claude_Preview__preview_start",
+      "Bash(git add *)"
     ]
   }
 }

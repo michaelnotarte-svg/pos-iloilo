@@ -1,6 +1,7 @@
 import { NavLink, Outlet } from 'react-router-dom'
 
 const NAV = [
+  { to: '/snapshot',   label: 'Daily Snapshot', icon: '📊' },
   { to: '/invoices',   label: 'Invoices',   icon: '🧾' },
   { to: '/stocks',     label: 'Stocks',     icon: '📦' },
   { to: '/inventory',  label: 'Inventory',  icon: '🏬' },

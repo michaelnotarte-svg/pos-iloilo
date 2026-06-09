@@ -9,13 +9,15 @@ import InvoiceDetail from './pages/InvoiceDetail'
 import Expenses from './pages/Expenses'
 import Inventory from './pages/Inventory'
 import Settings from './pages/Settings'
+import Snapshot from './pages/Snapshot'
 
 export default function App() {
   return (
     <BrowserRouter>
       <Routes>
         <Route element={<Layout />}>
-          <Route path="/" element={<Navigate to="/invoices" replace />} />
+          <Route path="/" element={<Navigate to="/snapshot" replace />} />
+          <Route path="/snapshot" element={<Snapshot />} />
           <Route path="/invoices" element={<Invoices />} />
           <Route path="/invoices/:id" element={<InvoiceDetail />} />
           <Route path="/stocks" element={<PurchaseOrders />} />

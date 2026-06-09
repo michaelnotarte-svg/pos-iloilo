@@ -41,7 +41,8 @@ export default function Inventory() {
   // Ledger filters
   const [lStorage, setLStorage] = useState('All')
   const [lItem, setLItem] = useState('')
-  const [lDate, setLDate] = useState('')
+  const [lFrom, setLFrom] = useState('')
+  const [lTo, setLTo] = useState('')
   const [lPage, setLPage] = useState(1)
 
   // Adjustment modal
@@ -131,7 +132,8 @@ export default function Inventory() {
   const ledgerFiltered = asc
     .filter((m) => (lStorage === 'All' || m.storage === lStorage))
     .filter((m) => (!lItem || m.item.toLowerCase().includes(lItem.toLowerCase())))
-    .filter((m) => (!lDate || m.date <= lDate))
+    .filter((m) => (!lFrom || m.date >= lFrom))
+    .filter((m) => (!lTo || m.date <= lTo))
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b._i - a._i))
   const lTotalPages = Math.max(1, Math.ceil(ledgerFiltered.length / PAGE_SIZE))
   const lPageSafe = Math.min(lPage, lTotalPages)
@@ -329,13 +331,23 @@ export default function Inventory() {
           <option value="All">All Warehouses</option>
           {storages.map((s) => <option key={s}>{s}</option>)}
         </select>
-        <input
-          type="date"
-          value={lDate}
-          onChange={(e) => { setLDate(e.target.value); setLPage(1) }}
-          className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        {lDate && <button onClick={() => setLDate('')} className="text-xs text-blue-600 hover:underline">clear date</button>}
+        <div className="flex items-center gap-2">
+          <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">From</label>
+          <input
+            type="date"
+            value={lFrom}
+            onChange={(e) => { setLFrom(e.target.value); setLPage(1) }}
+            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">To</label>
+          <input
+            type="date"
+            value={lTo}
+            onChange={(e) => { setLTo(e.target.value); setLPage(1) }}
+            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          />
+          {(lFrom || lTo) && <button onClick={() => { setLFrom(''); setLTo(''); setLPage(1) }} className="text-xs text-blue-600 hover:underline">clear</button>}
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
