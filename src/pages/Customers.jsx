@@ -105,7 +105,7 @@ export default function Customers() {
     <div className="p-6 max-w-5xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-gray-800">Customers</h1>
+        <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">Customers</h1>
         <button
           onClick={openAdd}
           className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg"
@@ -120,18 +120,18 @@ export default function Customers() {
         placeholder="Search by name, owner, or contact…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
 
       {/* Table */}
       {loading ? (
-        <p className="text-sm text-gray-400 text-center py-12">Loading…</p>
+        <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-12">Loading…</p>
       ) : filtered.length === 0 ? (
-        <p className="text-sm text-gray-400 text-center py-12">No customers found.</p>
+        <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-12">No customers found.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-gray-200">
+        <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
+            <thead className="bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400 uppercase text-xs">
               <tr>
                 <th className="text-left px-4 py-3">Display Name</th>
                 <th className="text-left px-4 py-3">Business Name</th>
@@ -141,14 +141,14 @@ export default function Customers() {
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 bg-white">
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-800">
               {filtered.map((c) => (
-                <tr key={c.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-gray-800">{c.display_name || c.business_name}</td>
-                  <td className="px-4 py-3 text-gray-600">{c.business_name}</td>
-                  <td className="px-4 py-3 text-gray-600">{c.owner_name ?? '—'}</td>
-                  <td className="px-4 py-3 text-gray-600">{c.contact ?? '—'}</td>
-                  <td className="px-4 py-3 text-gray-600 max-w-xs truncate">{c.address ?? '—'}</td>
+                <tr key={c.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
+                  <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-100">{c.display_name || c.business_name}</td>
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{c.business_name}</td>
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{c.owner_name ?? '—'}</td>
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{c.contact ?? '—'}</td>
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-300 max-w-xs truncate">{c.address ?? '—'}</td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
                     <button
                       onClick={() => openEdit(c)}
@@ -173,32 +173,32 @@ export default function Customers() {
       {/* Add / Edit Modal */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="font-semibold text-gray-800">{editId ? 'Edit Customer' : 'Add Customer'}</h2>
-              <button onClick={() => setModalOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+              <h2 className="font-semibold text-gray-800 dark:text-gray-100">{editId ? 'Edit Customer' : 'Add Customer'}</h2>
+              <button onClick={() => setModalOpen(false)} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 text-xl leading-none">&times;</button>
             </div>
             <form onSubmit={handleSave} className="px-6 py-4 space-y-3">
               {error && <p className="text-red-500 text-xs">{error}</p>}
               <Field label="Business Name *" value={form.business_name} onChange={(v) => setForm({ ...form, business_name: v })} />
               <div>
                 <Field label="Display Name" value={form.display_name} onChange={(v) => setForm({ ...form, display_name: v })} />
-                <p className="text-[11px] text-gray-400 mt-1">Shown throughout the app. Defaults to Business Name if left blank.</p>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Shown throughout the app. Defaults to Business Name if left blank.</p>
               </div>
               <Field label="Owner Name" value={form.owner_name} onChange={(v) => setForm({ ...form, owner_name: v })} />
               <Field label="Contact" value={form.contact} onChange={(v) => setForm({ ...form, contact: v })} />
               <Field label="Address" value={form.address} onChange={(v) => setForm({ ...form, address: v })} />
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Notes</label>
                 <textarea
                   rows={2}
                   value={form.notes}
                   onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
+                <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800">
                   Cancel
                 </button>
                 <button
@@ -217,13 +217,13 @@ export default function Customers() {
       {/* Delete Confirmation */}
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
-            <h2 className="font-semibold text-gray-800 mb-2">Delete customer?</h2>
-            <p className="text-sm text-gray-500 mb-4">
-              <span className="font-medium text-gray-700">{deleteTarget.business_name}</span> will be permanently removed.
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
+            <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-2">Delete customer?</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              <span className="font-medium text-gray-700 dark:text-gray-200">{deleteTarget.business_name}</span> will be permanently removed.
             </p>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
+              <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800">
                 Cancel
               </button>
               <button onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-lg">
@@ -240,12 +240,12 @@ export default function Customers() {
 function Field({ label, value, onChange }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+      <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">{label}</label>
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
     </div>
   )

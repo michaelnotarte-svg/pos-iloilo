@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { money } from '../lib/settings'
 import { fetchListNames, STORAGE_FALLBACK, PAYMENT_FALLBACK } from '../lib/lists'
 import ManageListModal from '../components/ManageListModal'
 
@@ -241,7 +242,7 @@ export default function InvoiceDetail() {
   const totalPaid = payments.reduce((s, p) => s + (Number(p.amount_paid) || 0), 0)
   const balance = totalAmount - totalPaid
 
-  if (loading) return <p className="text-sm text-gray-400 text-center py-20">Loading…</p>
+  if (loading) return <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-20">Loading…</p>
   if (!inv) return <p className="text-sm text-red-400 text-center py-20">Invoice not found.</p>
 
   return (
@@ -251,10 +252,10 @@ export default function InvoiceDetail() {
       </button>
 
       {/* ── Invoice Header ── */}
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm">
+        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <h2 className="text-lg font-semibold text-gray-800">
+            <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
               Invoice <span className="text-blue-700">#{inv.invoice_number}</span>
             </h2>
             {!editingHeader && (
@@ -279,31 +280,31 @@ export default function InvoiceDetail() {
             <div className="grid grid-cols-2 gap-3">
               <F label="Invoice #" value={headerForm.invoice_number} onChange={(v) => setHeaderForm({ ...headerForm, invoice_number: v })} />
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Date</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Date</label>
                 <input type="date" value={headerForm.date} onChange={(e) => setHeaderForm({ ...headerForm, date: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Customer</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Customer</label>
               <select value={headerForm.customer_id} onChange={(e) => setHeaderForm({ ...headerForm, customer_id: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">— Walk-in —</option>
                 {customers.map((c) => <option key={c.id} value={c.id}>{c.display_name || c.business_name}</option>)}
               </select>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Sale Type</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Sale Type</label>
                 <select value={headerForm.sale_type} onChange={(e) => setHeaderForm({ ...headerForm, sale_type: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                   {SALE_TYPES.map((s) => <option key={s}>{s}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Status</label>
                 <select value={headerForm.status} onChange={(e) => setHeaderForm({ ...headerForm, status: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                   {STATUSES.map((s) => <option key={s}>{s}</option>)}
                 </select>
               </div>
@@ -312,7 +313,7 @@ export default function InvoiceDetail() {
               <button type="submit" disabled={savingHeader} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg">
                 {savingHeader ? 'Saving…' : 'Save'}
               </button>
-              <button type="button" onClick={() => setEditingHeader(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
+              <button type="button" onClick={() => setEditingHeader(false)} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800">Cancel</button>
             </div>
           </form>
         ) : (
@@ -326,20 +327,20 @@ export default function InvoiceDetail() {
       </div>
 
       {/* ── Line Items ── */}
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h3 className="font-semibold text-gray-800">Line Items</h3>
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm">
+        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+          <h3 className="font-semibold text-gray-800 dark:text-gray-100">Line Items</h3>
           <button onClick={openAddLine} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg">
             + Add Item
           </button>
         </div>
 
         {lines.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-10">No items yet.</p>
+          <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-10">No items yet.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
+              <thead className="bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400 uppercase text-xs">
                 <tr>
                   <th className="text-left px-4 py-3">Item</th>
                   <th className="text-left px-4 py-3">Batch #</th>
@@ -351,20 +352,20 @@ export default function InvoiceDetail() {
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {lines.map((l) => (
-                  <tr key={l.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium text-gray-800">{l.items?.name ?? '—'}</td>
-                    <td className="px-4 py-3 text-gray-600 font-mono text-xs">{l.batch_number}</td>
+                  <tr key={l.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
+                    <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-100">{l.items?.name ?? '—'}</td>
+                    <td className="px-4 py-3 text-gray-600 dark:text-gray-300 font-mono text-xs">{l.batch_number}</td>
                     <td className="px-4 py-3">
                       <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${l.storage === 'Everest' ? 'bg-indigo-100 text-indigo-700' : 'bg-teal-100 text-teal-700'}`}>
                         {l.storage}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right text-gray-600">{l.boxes != null ? Number(l.boxes).toLocaleString() : '—'}</td>
-                    <td className="px-4 py-3 text-right text-gray-600">{fmt(l.kilos)}</td>
-                    <td className="px-4 py-3 text-right text-gray-600">₱{fmt(l.unit_price)}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-gray-800">₱{fmt(l.amount)}</td>
+                    <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">{l.boxes != null ? Number(l.boxes).toLocaleString() : '—'}</td>
+                    <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">{fmt(l.kilos)}</td>
+                    <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">{money(l.unit_price)}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-gray-800 dark:text-gray-100">{money(l.amount)}</td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       <button onClick={() => openEditLine(l)} className="text-blue-600 hover:underline text-xs mr-3">Edit</button>
                       <button onClick={() => setDeleteLineTarget(l)} className="text-red-500 hover:underline text-xs">Delete</button>
@@ -372,10 +373,10 @@ export default function InvoiceDetail() {
                   </tr>
                 ))}
               </tbody>
-              <tfoot className="bg-gray-50 border-t border-gray-200 font-semibold text-gray-700 text-sm">
+              <tfoot className="bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 font-semibold text-gray-700 dark:text-gray-200 text-sm">
                 <tr>
-                  <td colSpan={6} className="px-4 py-3 text-right text-xs uppercase text-gray-500 tracking-wide">Invoice Total</td>
-                  <td className="px-4 py-3 text-right text-gray-900">₱{fmt(totalAmount)}</td>
+                  <td colSpan={6} className="px-4 py-3 text-right text-xs uppercase text-gray-500 dark:text-gray-400 tracking-wide">Invoice Total</td>
+                  <td className="px-4 py-3 text-right text-gray-900 dark:text-gray-100">{money(totalAmount)}</td>
                   <td></td>
                 </tr>
               </tfoot>
@@ -385,10 +386,10 @@ export default function InvoiceDetail() {
       </div>
 
       {/* ── Payments / AR ── */}
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm">
+        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
           <div>
-            <h3 className="font-semibold text-gray-800">Payments</h3>
+            <h3 className="font-semibold text-gray-800 dark:text-gray-100">Payments</h3>
           </div>
           <button onClick={openAddPayment} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg">
             + Add Payment
@@ -396,11 +397,11 @@ export default function InvoiceDetail() {
         </div>
 
         {payments.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-8">No payments recorded.</p>
+          <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-8">No payments recorded.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
+              <thead className="bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400 uppercase text-xs">
                 <tr>
                   <th className="text-left px-4 py-3">Date Paid</th>
                   <th className="text-left px-4 py-3">Mode</th>
@@ -410,14 +411,14 @@ export default function InvoiceDetail() {
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {payments.map((p) => (
-                  <tr key={p.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 text-gray-700">{p.date_paid}</td>
-                    <td className="px-4 py-3 text-gray-600">{p.mode_of_payment}</td>
-                    <td className="px-4 py-3 text-gray-500">{p.deposit_date ?? '—'}</td>
-                    <td className="px-4 py-3 text-right font-medium text-green-700">₱{fmt(p.amount_paid)}</td>
-                    <td className="px-4 py-3 text-right text-gray-600">{p.remaining_balance != null ? `₱${fmt(p.remaining_balance)}` : '—'}</td>
+                  <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
+                    <td className="px-4 py-3 text-gray-700 dark:text-gray-200">{p.date_paid}</td>
+                    <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{p.mode_of_payment}</td>
+                    <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{p.deposit_date ?? '—'}</td>
+                    <td className="px-4 py-3 text-right font-medium text-green-700">{money(p.amount_paid)}</td>
+                    <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">{p.remaining_balance != null ? `${money(p.remaining_balance)}` : '—'}</td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       <button onClick={() => openEditPayment(p)} className="text-blue-600 hover:underline text-xs mr-3">Edit</button>
                       <button onClick={() => setDeletePayTarget(p)} className="text-red-500 hover:underline text-xs">Delete</button>
@@ -430,10 +431,10 @@ export default function InvoiceDetail() {
         )}
 
         {/* Running balance footer */}
-        <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-10 text-sm">
-          <span className="text-gray-500">Total Paid: <span className="font-semibold text-gray-800">₱{fmt(totalPaid)}</span></span>
+        <div className="px-6 py-4 border-t border-gray-100 dark:border-gray-700 flex justify-end gap-10 text-sm">
+          <span className="text-gray-500 dark:text-gray-400">Total Paid: <span className="font-semibold text-gray-800 dark:text-gray-100">{money(totalPaid)}</span></span>
           <span className={`font-semibold ${balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-            Balance: ₱{fmt(balance)}
+            Balance: {money(balance)}
           </span>
         </div>
       </div>
@@ -444,9 +445,9 @@ export default function InvoiceDetail() {
           <form onSubmit={saveLine} className="space-y-3">
             {lineError && <p className="text-red-500 text-xs">{lineError}</p>}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Item *</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Item *</label>
               <select value={lineForm.item_id} onChange={(e) => setLineForm({ ...lineForm, item_id: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 <option value="">Select item…</option>
                 {items.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
               </select>
@@ -454,11 +455,11 @@ export default function InvoiceDetail() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-medium text-gray-600">Storage *</label>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">Storage *</label>
                   <button type="button" onClick={() => setManageList('storage')} className="text-[11px] text-blue-600 hover:underline">Manage</button>
                 </div>
                 <select value={lineForm.storage} onChange={(e) => setLineForm({ ...lineForm, storage: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                   {storageOptions.map((s) => <option key={s}>{s}</option>)}
                 </select>
               </div>
@@ -470,8 +471,8 @@ export default function InvoiceDetail() {
               <F label="Unit Price *" value={lineForm.unit_price} onChange={(v) => setLineForm({ ...lineForm, unit_price: v })} type="number" />
             </div>
             {lineForm.kilos && lineForm.unit_price && (
-              <p className="text-xs text-gray-500 text-right">
-                Amount: <span className="font-semibold text-gray-800">₱{fmt(Number(lineForm.kilos) * Number(lineForm.unit_price))}</span>
+              <p className="text-xs text-gray-500 dark:text-gray-400 text-right">
+                Amount: <span className="font-semibold text-gray-800 dark:text-gray-100">{money(Number(lineForm.kilos) * Number(lineForm.unit_price))}</span>
               </p>
             )}
             <ModalActions onCancel={() => setLineModal(false)} saving={savingLine} />
@@ -487,26 +488,26 @@ export default function InvoiceDetail() {
             <div className="grid grid-cols-2 gap-3">
               <F label="Amount Paid *" value={payForm.amount_paid} onChange={(v) => setPayForm({ ...payForm, amount_paid: v })} type="number" />
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Date Paid</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Date Paid</label>
                 <input type="date" value={payForm.date_paid} onChange={(e) => setPayForm({ ...payForm, date_paid: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
             </div>
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-medium text-gray-600">Mode of Payment</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">Mode of Payment</label>
                 <button type="button" onClick={() => setManageList('payment_method')} className="text-[11px] text-blue-600 hover:underline">Manage</button>
               </div>
               <select value={payForm.mode_of_payment} onChange={(e) => setPayForm({ ...payForm, mode_of_payment: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
                 {paymentOptions.map((m) => <option key={m}>{m}</option>)}
               </select>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Deposit Date</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Deposit Date</label>
                 <input type="date" value={payForm.deposit_date} onChange={(e) => setPayForm({ ...payForm, deposit_date: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <F label="Remaining Balance" value={payForm.remaining_balance} onChange={(v) => setPayForm({ ...payForm, remaining_balance: v })} type="number" />
             </div>
@@ -527,7 +528,7 @@ export default function InvoiceDetail() {
       {deletePayTarget && (
         <Confirm
           title="Delete payment?"
-          message={`₱${fmt(deletePayTarget.amount_paid)} on ${deletePayTarget.date_paid} will be removed.`}
+          message={`${money(deletePayTarget.amount_paid)} on ${deletePayTarget.date_paid} will be removed.`}
           onCancel={() => setDeletePayTarget(null)}
           onConfirm={deletePayment}
         />
@@ -559,8 +560,8 @@ export default function InvoiceDetail() {
 function InfoRow({ label, value }) {
   return (
     <div>
-      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">{label}</span>
-      <p className="text-gray-800 mt-0.5">{value ?? '—'}</p>
+      <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">{label}</span>
+      <p className="text-gray-800 dark:text-gray-100 mt-0.5">{value ?? '—'}</p>
     </div>
   )
 }
@@ -568,13 +569,13 @@ function InfoRow({ label, value }) {
 function F({ label, value, onChange, type = 'text' }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+      <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">{label}</label>
       <input
         type={type}
         step={type === 'number' ? 'any' : undefined}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
     </div>
   )
@@ -583,10 +584,10 @@ function F({ label, value, onChange, type = 'text' }) {
 function Modal({ title, onClose, children }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="font-semibold text-gray-800">{title}</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-lg mx-4">
+        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+          <h2 className="font-semibold text-gray-800 dark:text-gray-100">{title}</h2>
+          <button onClick={onClose} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 text-xl leading-none">&times;</button>
         </div>
         <div className="px-6 py-4">{children}</div>
       </div>
@@ -597,7 +598,7 @@ function Modal({ title, onClose, children }) {
 function ModalActions({ onCancel, saving }) {
   return (
     <div className="flex justify-end gap-2 pt-2">
-      <button type="button" onClick={onCancel} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
+      <button type="button" onClick={onCancel} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800">Cancel</button>
       <button type="submit" disabled={saving} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg">
         {saving ? 'Saving…' : 'Save'}
       </button>
@@ -608,11 +609,11 @@ function ModalActions({ onCancel, saving }) {
 function Confirm({ title, message, onCancel, onConfirm, destructive = true }) {
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
-        <h2 className="font-semibold text-gray-800 mb-2">{title}</h2>
-        <p className="text-sm text-gray-500 mb-4">{message}</p>
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
+        <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-2">{title}</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{message}</p>
         <div className="flex justify-end gap-2">
-          <button onClick={onCancel} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
+          <button onClick={onCancel} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800">Cancel</button>
           <button onClick={onConfirm} className={`text-white text-sm font-medium px-4 py-2 rounded-lg ${destructive ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'}`}>
             Confirm
           </button>

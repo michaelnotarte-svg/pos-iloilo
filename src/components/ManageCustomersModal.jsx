@@ -54,10 +54,10 @@ export default function ManageCustomersModal({ onClose, onChange }) {
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[70]">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="font-semibold text-gray-800">Manage Customers</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md mx-4">
+        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+          <h2 className="font-semibold text-gray-800 dark:text-gray-100">Manage Customers</h2>
+          <button onClick={onClose} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 text-xl leading-none">&times;</button>
         </div>
 
         <div className="px-6 py-4 space-y-4">
@@ -68,14 +68,14 @@ export default function ManageCustomersModal({ onClose, onChange }) {
                 placeholder="Display name"
                 value={display}
                 onChange={(e) => setDisplay(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <input
                 type="text"
                 placeholder="Business name"
                 value={business}
                 onChange={(e) => setBusiness(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <div className="flex justify-end">
@@ -86,17 +86,17 @@ export default function ManageCustomersModal({ onClose, onChange }) {
           </form>
           {error && <p className="text-red-500 text-xs">{error}</p>}
 
-          <ul className="divide-y divide-gray-100 max-h-64 overflow-y-auto rounded-lg border border-gray-200">
+          <ul className="divide-y divide-gray-100 dark:divide-gray-700 max-h-64 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700">
             {loading ? (
-              <li className="px-4 py-3 text-sm text-gray-400">Loading…</li>
+              <li className="px-4 py-3 text-sm text-gray-400 dark:text-gray-500">Loading…</li>
             ) : customers.length === 0 ? (
-              <li className="px-4 py-3 text-sm text-gray-400">No customers yet.</li>
+              <li className="px-4 py-3 text-sm text-gray-400 dark:text-gray-500">No customers yet.</li>
             ) : (
               customers.map((c) => (
-                <li key={c.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50">
-                  <span className="text-sm text-gray-700">
+                <li key={c.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700/40">
+                  <span className="text-sm text-gray-700 dark:text-gray-200">
                     {c.display_name || c.business_name}
-                    {c.display_name && <span className="text-gray-400 text-xs ml-2">({c.business_name})</span>}
+                    {c.display_name && <span className="text-gray-400 dark:text-gray-500 text-xs ml-2">({c.business_name})</span>}
                   </span>
                   <button onClick={() => setDeleteTarget(c)} className="text-red-400 hover:text-red-600 text-xs">Remove</button>
                 </li>
@@ -105,20 +105,20 @@ export default function ManageCustomersModal({ onClose, onChange }) {
           </ul>
 
           <div className="flex justify-end">
-            <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Done</button>
+            <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800">Done</button>
           </div>
         </div>
       </div>
 
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[80]">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
-            <h2 className="font-semibold text-gray-800 mb-2">Remove customer?</h2>
-            <p className="text-sm text-gray-500 mb-4">
-              <span className="font-medium text-gray-700">{deleteTarget.display_name || deleteTarget.business_name}</span> will be removed.
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
+            <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-2">Remove customer?</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              <span className="font-medium text-gray-700 dark:text-gray-200">{deleteTarget.display_name || deleteTarget.business_name}</span> will be removed.
             </p>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
+              <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800">Cancel</button>
               <button onClick={remove} className="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-lg">Remove</button>
             </div>
           </div>

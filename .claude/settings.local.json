@@ -6,7 +6,9 @@
       "PowerShell(New-Item -ItemType Directory -Force \"C:\\\\Users\\\\Dada\\\\Documents\\\\POS project V1\\\\supabase\\\\migrations\")",
       "Bash(npm run *)",
       "Bash(curl -s http://localhost:5173 -o /dev/null -w \"%{http_code}\")",
-      "Bash(npx vite *)"
+      "Bash(npx vite *)",
+      "Bash(node sweep.cjs)",
+      "mcp__Claude_Preview__preview_start"
     ]
   }
 }

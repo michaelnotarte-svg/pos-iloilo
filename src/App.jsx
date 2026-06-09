@@ -8,6 +8,7 @@ import Invoices from './pages/Invoices'
 import InvoiceDetail from './pages/InvoiceDetail'
 import Expenses from './pages/Expenses'
 import Inventory from './pages/Inventory'
+import Settings from './pages/Settings'
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
           <Route path="/items" element={<Items />} />
           <Route path="/expenses" element={<Expenses />} />
           <Route path="/inventory" element={<Inventory />} />
+          <Route path="/settings" element={<Settings />} />
         </Route>
       </Routes>
     </BrowserRouter>

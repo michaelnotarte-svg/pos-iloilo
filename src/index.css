@@ -1,1 +1,9 @@
 @import "tailwindcss";
+
+/* Class-based dark mode: toggling `.dark` on <html> activates dark: utilities */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  html { background-color: #f9fafb; }
+  html.dark { background-color: #0b1020; color-scheme: dark; }
+}

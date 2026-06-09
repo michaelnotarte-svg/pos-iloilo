@@ -101,7 +101,7 @@ export default function Items() {
   return (
     <div className="p-6 max-w-3xl mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-gray-800">Items</h1>
+        <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">Items</h1>
         <button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg">
           + Add Item
         </button>
@@ -112,17 +112,17 @@ export default function Items() {
         placeholder="Search by name or category…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
 
       {loading ? (
-        <p className="text-sm text-gray-400 text-center py-12">Loading…</p>
+        <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-12">Loading…</p>
       ) : filtered.length === 0 ? (
-        <p className="text-sm text-gray-400 text-center py-12">No items found.</p>
+        <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-12">No items found.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-gray-200">
+        <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
+            <thead className="bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400 uppercase text-xs">
               <tr>
                 <th className="text-left px-4 py-3">Name</th>
                 <th className="text-left px-4 py-3">Brand</th>
@@ -130,12 +130,12 @@ export default function Items() {
                 <th className="px-4 py-3"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 bg-white">
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-800">
               {filtered.map((item) => (
-                <tr key={item.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-gray-800">{item.name}</td>
-                  <td className="px-4 py-3 text-gray-600">{item.brand ?? '—'}</td>
-                  <td className="px-4 py-3 text-gray-600">{item.category ?? '—'}</td>
+                <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
+                  <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-100">{item.name}</td>
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{item.brand ?? '—'}</td>
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{item.category ?? '—'}</td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
                     <button onClick={() => openEdit(item)} className="text-blue-600 hover:underline text-xs mr-3">Edit</button>
                     <button onClick={() => setDeleteTarget(item)} className="text-red-500 hover:underline text-xs">Delete</button>
@@ -149,29 +149,29 @@ export default function Items() {
 
       {modalOpen && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="font-semibold text-gray-800">{editId ? 'Edit Item' : 'Add Item'}</h2>
-              <button onClick={() => setModalOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm mx-4">
+            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+              <h2 className="font-semibold text-gray-800 dark:text-gray-100">{editId ? 'Edit Item' : 'Add Item'}</h2>
+              <button onClick={() => setModalOpen(false)} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 text-xl leading-none">&times;</button>
             </div>
             <form onSubmit={handleSave} className="px-6 py-4 space-y-3">
               {error && <p className="text-red-500 text-xs">{error}</p>}
               <ManagedSelect label="Item *" value={form.base_name} onChange={(v) => setForm({ ...form, base_name: v })} options={baseOptions} onManage={() => setManageList('item_base')} />
               <ManagedSelect label="Brand" value={form.brand} onChange={(v) => setForm({ ...form, brand: v })} options={brandOptions} onManage={() => setManageList('brand')} />
               {form.base_name.trim() && (
-                <p className="text-xs text-gray-500">
-                  Saved as: <span className="font-semibold text-gray-700">{buildName(form.base_name, form.brand)}</span>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Saved as: <span className="font-semibold text-gray-700 dark:text-gray-200">{buildName(form.base_name, form.brand)}</span>
                 </p>
               )}
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-medium text-gray-600">Category</label>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">Category</label>
                   <button type="button" onClick={() => setManageList('item_category')} className="text-xs text-blue-600 hover:underline">Manage</button>
                 </div>
                 <select
                   value={form.category}
                   onChange={(e) => setForm({ ...form, category: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">— None —</option>
                   {categoryOptions.map((c) => <option key={c}>{c}</option>)}
@@ -179,7 +179,7 @@ export default function Items() {
                 </select>
               </div>
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
+                <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800">Cancel</button>
                 <button type="submit" disabled={saving} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg">
                   {saving ? 'Saving…' : 'Save'}
                 </button>
@@ -191,13 +191,13 @@ export default function Items() {
 
       {deleteTarget && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
-            <h2 className="font-semibold text-gray-800 mb-2">Delete item?</h2>
-            <p className="text-sm text-gray-500 mb-4">
-              <span className="font-medium text-gray-700">{deleteTarget.name}</span> will be permanently removed.
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
+            <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-2">Delete item?</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              <span className="font-medium text-gray-700 dark:text-gray-200">{deleteTarget.name}</span> will be permanently removed.
             </p>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
+              <button onClick={() => setDeleteTarget(null)} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800">Cancel</button>
               <button onClick={handleDelete} className="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-lg">Delete</button>
             </div>
           </div>
@@ -226,13 +226,13 @@ function ManagedSelect({ label, value, onChange, options, onManage }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <label className="block text-xs font-medium text-gray-600">{label}</label>
+        <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">{label}</label>
         <button type="button" onClick={onManage} className="text-[11px] text-blue-600 hover:underline">Manage</button>
       </div>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       >
         <option value="">— None —</option>
         {options.map((o) => <option key={o}>{o}</option>)}
@@ -245,12 +245,12 @@ function ManagedSelect({ label, value, onChange, options, onManage }) {
 function Field({ label, value, onChange }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+      <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">{label}</label>
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
     </div>
   )

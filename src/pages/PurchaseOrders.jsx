@@ -108,7 +108,7 @@ export default function PurchaseOrders() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-gray-800">Stocks</h1>
+        <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">Stocks</h1>
         <button
           onClick={openAdd}
           className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg"
@@ -122,17 +122,17 @@ export default function PurchaseOrders() {
         placeholder="Search by ref #, supplier, source, category…"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
 
       {loading ? (
-        <p className="text-sm text-gray-400 text-center py-12">Loading…</p>
+        <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-12">Loading…</p>
       ) : filtered.length === 0 ? (
-        <p className="text-sm text-gray-400 text-center py-12">No stock deliveries yet.</p>
+        <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-12">No stock deliveries yet.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-gray-200">
+        <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
+            <thead className="bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400 uppercase text-xs">
               <tr>
                 <th className="text-left px-4 py-3">Date</th>
                 <th className="text-left px-4 py-3">Source</th>
@@ -143,20 +143,20 @@ export default function PurchaseOrders() {
                 <th className="text-left px-4 py-3">Ref #</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 bg-white">
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-800">
               {filtered.map((o) => (
                 <tr
                   key={o.id}
                   onClick={() => navigate(`/stocks/${o.id}`)}
-                  className="hover:bg-blue-50 cursor-pointer"
+                  className="hover:bg-blue-50 dark:hover:bg-gray-700/40 cursor-pointer"
                 >
-                  <td className="px-4 py-3 font-medium text-gray-700">{o.date}</td>
-                  <td className="px-4 py-3 text-gray-600">{o.source ?? '—'}</td>
-                  <td className="px-4 py-3 text-right text-gray-600">{o.lineCount}</td>
-                  <td className="px-4 py-3 text-right text-gray-600">{o.totalBoxes > 0 ? o.totalBoxes.toLocaleString() : '—'}</td>
-                  <td className="px-4 py-3 text-right text-gray-600">{o.totalKilos > 0 ? o.totalKilos.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 }) : '—'}</td>
-                  <td className="px-4 py-3 text-gray-500 max-w-xs truncate" title={o.itemList}>{o.itemList || '—'}</td>
-                  <td className="px-4 py-3 text-gray-400">{o.po_number || '—'}</td>
+                  <td className="px-4 py-3 font-medium text-gray-700 dark:text-gray-200">{o.date}</td>
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{o.source ?? '—'}</td>
+                  <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">{o.lineCount}</td>
+                  <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">{o.totalBoxes > 0 ? o.totalBoxes.toLocaleString() : '—'}</td>
+                  <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">{o.totalKilos > 0 ? o.totalKilos.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 }) : '—'}</td>
+                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400 max-w-xs truncate" title={o.itemList}>{o.itemList || '—'}</td>
+                  <td className="px-4 py-3 text-gray-400 dark:text-gray-500">{o.po_number || '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -167,32 +167,32 @@ export default function PurchaseOrders() {
       {/* New PO Modal */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="font-semibold text-gray-800">New Stock Delivery</h2>
-              <button onClick={() => setModalOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-lg mx-4">
+            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+              <h2 className="font-semibold text-gray-800 dark:text-gray-100">New Stock Delivery</h2>
+              <button onClick={() => setModalOpen(false)} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 text-xl leading-none">&times;</button>
             </div>
             <form onSubmit={handleSave} className="px-6 py-4 space-y-3">
               {error && <p className="text-red-500 text-xs">{error}</p>}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Date *</label>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Date *</label>
                   <input
                     type="date"
                     value={form.date}
                     onChange={(e) => set('date', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-medium text-gray-600">Storage *</label>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">Storage *</label>
                     <button type="button" onClick={() => setManageList('storage')} className="text-[11px] text-blue-600 hover:underline">Manage</button>
                   </div>
                   <select
                     value={form.storage}
                     onChange={(e) => set('storage', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     {storageOptions.map((s) => <option key={s}>{s}</option>)}
                   </select>
@@ -204,17 +204,17 @@ export default function PurchaseOrders() {
               </div>
               <ManagedSelect label="Category" value={form.category} onChange={(v) => set('category', v)} options={categoryOptions} onManage={() => setManageList('delivery_category')} />
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Notes</label>
                 <textarea
                   rows={2}
                   value={form.notes}
                   onChange={(e) => set('notes', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <Field label="Ref # (optional)" value={form.po_number} onChange={(v) => set('po_number', v)} />
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
+                <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800">
                   Cancel
                 </button>
                 <button
@@ -253,13 +253,13 @@ function ManagedSelect({ label, value, onChange, options, onManage }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <label className="block text-xs font-medium text-gray-600">{label}</label>
+        <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">{label}</label>
         <button type="button" onClick={onManage} className="text-[11px] text-blue-600 hover:underline">Manage</button>
       </div>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       >
         <option value="">— None —</option>
         {options.map((o) => <option key={o}>{o}</option>)}
@@ -272,12 +272,12 @@ function ManagedSelect({ label, value, onChange, options, onManage }) {
 function Field({ label, value, onChange }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+      <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">{label}</label>
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
     </div>
   )

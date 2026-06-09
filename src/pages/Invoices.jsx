@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { money } from '../lib/settings'
 import { fetchListNames, PAYMENT_FALLBACK } from '../lib/lists'
 import ManageListModal from '../components/ManageListModal'
 import ManageCustomersModal from '../components/ManageCustomersModal'
@@ -102,7 +103,7 @@ export default function Invoices() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold text-gray-800">Invoices</h1>
+        <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">Invoices</h1>
         <button
           onClick={() => { setForm(EMPTY_FORM); setError(''); setModalOpen(true) }}
           className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg"
@@ -117,12 +118,12 @@ export default function Invoices() {
           placeholder="Search by invoice # or customer…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="flex-1 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         >
           <option value="All">All Statuses</option>
           {STATUSES.map((s) => <option key={s}>{s}</option>)}
@@ -130,13 +131,13 @@ export default function Invoices() {
       </div>
 
       {loading ? (
-        <p className="text-sm text-gray-400 text-center py-12">Loading…</p>
+        <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-12">Loading…</p>
       ) : filtered.length === 0 ? (
-        <p className="text-sm text-gray-400 text-center py-12">No invoices found.</p>
+        <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-12">No invoices found.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-gray-200">
+        <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
           <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
+            <thead className="bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400 uppercase text-xs">
               <tr>
                 <th className="text-left px-4 py-3">Invoice #</th>
                 <th className="text-left px-4 py-3">Date</th>
@@ -146,19 +147,19 @@ export default function Invoices() {
                 <th className="text-left px-4 py-3">Status</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 bg-white">
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-800">
               {filtered.map((inv) => (
                 <tr
                   key={inv.id}
                   onClick={() => navigate(`/invoices/${inv.id}`)}
-                  className="hover:bg-blue-50 cursor-pointer"
+                  className="hover:bg-blue-50 dark:hover:bg-gray-700/40 cursor-pointer"
                 >
                   <td className="px-4 py-3 font-medium text-blue-700">{inv.invoice_number}</td>
-                  <td className="px-4 py-3 text-gray-600">{inv.date}</td>
-                  <td className="px-4 py-3 text-gray-700">{inv.customers ? (inv.customers.display_name || inv.customers.business_name) : <span className="text-gray-400 italic">Walk-in</span>}</td>
-                  <td className="px-4 py-3 text-gray-600">{inv.sale_type}</td>
-                  <td className="px-4 py-3 text-right font-medium text-gray-800">
-                    ₱{grandTotal(inv).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{inv.date}</td>
+                  <td className="px-4 py-3 text-gray-700 dark:text-gray-200">{inv.customers ? (inv.customers.display_name || inv.customers.business_name) : <span className="text-gray-400 dark:text-gray-500 italic">Walk-in</span>}</td>
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{inv.sale_type}</td>
+                  <td className="px-4 py-3 text-right font-medium text-gray-800 dark:text-gray-100">
+                    {money(grandTotal(inv))}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLE[inv.status]}`}>
@@ -174,43 +175,43 @@ export default function Invoices() {
 
       {modalOpen && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="font-semibold text-gray-800">New Invoice</h2>
-              <button onClick={() => setModalOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-md mx-4">
+            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+              <h2 className="font-semibold text-gray-800 dark:text-gray-100">New Invoice</h2>
+              <button onClick={() => setModalOpen(false)} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 text-xl leading-none">&times;</button>
             </div>
             <form onSubmit={handleSave} className="px-6 py-4 space-y-3">
               {error && <p className="text-red-500 text-xs">{error}</p>}
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Invoice # *</label>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Invoice # *</label>
                   <input
                     type="text"
                     value={form.invoice_number}
                     onChange={(e) => set('invoice_number', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Date *</label>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Date *</label>
                   <input
                     type="date"
                     value={form.date}
                     onChange={(e) => set('date', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-medium text-gray-600">Customer</label>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">Customer</label>
                   <button type="button" onClick={() => setManageCustomers(true)} className="text-[11px] text-blue-600 hover:underline">Manage</button>
                 </div>
                 <select
                   value={form.customer_id}
                   onChange={(e) => set('customer_id', e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="">— Walk-in / No customer —</option>
                   {customers.map((c) => (
@@ -221,21 +222,21 @@ export default function Invoices() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Sale Type</label>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Sale Type</label>
                   <select
                     value={form.sale_type}
                     onChange={(e) => set('sale_type', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     {SALE_TYPES.map((s) => <option key={s}>{s}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Status</label>
                   <select
                     value={form.status}
                     onChange={(e) => set('status', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     {STATUSES.map((s) => <option key={s}>{s}</option>)}
                   </select>
@@ -245,13 +246,13 @@ export default function Invoices() {
               {form.status === 'Paid' && (
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-medium text-gray-600">Payment Method</label>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">Payment Method</label>
                     <button type="button" onClick={() => setManagePayment(true)} className="text-[11px] text-blue-600 hover:underline">Manage</button>
                   </div>
                   <select
                     value={form.payment_method}
                     onChange={(e) => set('payment_method', e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">— Select —</option>
                     {paymentOptions.map((m) => <option key={m}>{m}</option>)}
@@ -260,7 +261,7 @@ export default function Invoices() {
               )}
 
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
+                <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800">Cancel</button>
                 <button type="submit" disabled={saving} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg">
                   {saving ? 'Creating…' : 'Create & Add Lines →'}
                 </button>

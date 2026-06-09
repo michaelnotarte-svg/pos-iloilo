@@ -223,7 +223,7 @@ export default function PurchaseOrderDetail() {
   const totalBoxes = lines.reduce((s, l) => s + (Number(l.boxes) || 0), 0)
   const totalKilos = lines.reduce((s, l) => s + (Number(l.kilos) || 0), 0)
 
-  if (loading) return <p className="text-sm text-gray-400 text-center py-20">Loading…</p>
+  if (loading) return <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-20">Loading…</p>
   if (!po) return <p className="text-sm text-red-400 text-center py-20">PO not found.</p>
 
   return (
@@ -234,9 +234,9 @@ export default function PurchaseOrderDetail() {
       </button>
 
       {/* ── PO Header Card ── */}
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-800">
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm">
+        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
             Delivery <span className="text-blue-700">{po.po_number}</span>
           </h2>
           <div className="flex gap-2">
@@ -265,25 +265,25 @@ export default function PurchaseOrderDetail() {
             <div className="grid grid-cols-2 gap-3">
               <HField label="Ref #" value={headerForm.po_number} onChange={(v) => setHeaderForm({ ...headerForm, po_number: v })} />
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Date</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Date</label>
                 <input
                   type="date"
                   value={headerForm.date}
                   onChange={(e) => setHeaderForm({ ...headerForm, date: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-medium text-gray-600">Storage</label>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">Storage</label>
                   <button type="button" onClick={() => setManageList('storage')} className="text-[11px] text-blue-600 hover:underline">Manage</button>
                 </div>
                 <select
                   value={headerForm.storage}
                   onChange={(e) => setHeaderForm({ ...headerForm, storage: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   {storageOptions.map((s) => <option key={s}>{s}</option>)}
                 </select>
@@ -295,19 +295,19 @@ export default function PurchaseOrderDetail() {
               <HSelect label="Category" value={headerForm.category} onChange={(v) => setHeaderForm({ ...headerForm, category: v })} options={categoryOptions} onManage={() => setManageList('delivery_category')} />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Notes</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Notes</label>
               <textarea
                 rows={2}
                 value={headerForm.notes}
                 onChange={(e) => setHeaderForm({ ...headerForm, notes: e.target.value })}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <div className="flex gap-2 pt-1">
               <button type="submit" disabled={savingHeader} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg">
                 {savingHeader ? 'Saving…' : 'Save'}
               </button>
-              <button type="button" onClick={() => setEditingHeader(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">
+              <button type="button" onClick={() => setEditingHeader(false)} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800">
                 Cancel
               </button>
             </div>
@@ -321,8 +321,8 @@ export default function PurchaseOrderDetail() {
             <InfoRow label="Category" value={po.category} />
             {po.notes && (
               <div className="col-span-2 sm:col-span-3">
-                <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Notes</span>
-                <p className="text-gray-700 mt-0.5">{po.notes}</p>
+                <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Notes</span>
+                <p className="text-gray-700 dark:text-gray-200 mt-0.5">{po.notes}</p>
               </div>
             )}
           </div>
@@ -330,9 +330,9 @@ export default function PurchaseOrderDetail() {
       </div>
 
       {/* ── Stock Entries ── */}
-      <div className="bg-white border border-gray-200 rounded-xl shadow-sm">
-        <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-          <h3 className="font-semibold text-gray-800">Stock Entries</h3>
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm">
+        <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+          <h3 className="font-semibold text-gray-800 dark:text-gray-100">Stock Entries</h3>
           <button
             onClick={openAddLine}
             className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg"
@@ -342,11 +342,11 @@ export default function PurchaseOrderDetail() {
         </div>
 
         {lines.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-10">No items yet. Add the first one.</p>
+          <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-10">No items yet. Add the first one.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 text-gray-500 uppercase text-xs">
+              <thead className="bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400 uppercase text-xs">
                 <tr>
                   <th className="text-left px-4 py-3">Item</th>
                   <th className="text-left px-4 py-3">Batch #</th>
@@ -358,20 +358,20 @@ export default function PurchaseOrderDetail() {
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                 {lines.map((l) => (
-                  <tr key={l.id} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-medium text-gray-800">{l.items?.name ?? '—'}</td>
-                    <td className="px-4 py-3 text-gray-600 font-mono text-xs">{l.batch_number}</td>
+                  <tr key={l.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
+                    <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-100">{l.items?.name ?? '—'}</td>
+                    <td className="px-4 py-3 text-gray-600 dark:text-gray-300 font-mono text-xs">{l.batch_number}</td>
                     <td className="px-4 py-3">
                       <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${l.storage === 'Everest' ? 'bg-indigo-100 text-indigo-700' : 'bg-teal-100 text-teal-700'}`}>
                         {l.storage}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right text-gray-700">{l.boxes != null ? Number(l.boxes).toLocaleString() : '—'}</td>
-                    <td className="px-4 py-3 text-right text-gray-700">{Number(l.kilos).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 })}</td>
-                    <td className="px-4 py-3 text-right text-gray-500">{l.boxes > 0 ? (Number(l.kilos) / Number(l.boxes)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</td>
-                    <td className="px-4 py-3 text-gray-500">{l.date}</td>
+                    <td className="px-4 py-3 text-right text-gray-700 dark:text-gray-200">{l.boxes != null ? Number(l.boxes).toLocaleString() : '—'}</td>
+                    <td className="px-4 py-3 text-right text-gray-700 dark:text-gray-200">{Number(l.kilos).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 })}</td>
+                    <td className="px-4 py-3 text-right text-gray-500 dark:text-gray-400">{l.boxes > 0 ? (Number(l.kilos) / Number(l.boxes)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</td>
+                    <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{l.date}</td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       <button onClick={() => openEditLine(l)} className="text-blue-600 hover:underline text-xs mr-3">Edit</button>
                       <button onClick={() => setDeleteLineTarget(l)} className="text-red-500 hover:underline text-xs">Delete</button>
@@ -379,9 +379,9 @@ export default function PurchaseOrderDetail() {
                   </tr>
                 ))}
               </tbody>
-              <tfoot className="bg-gray-50 text-sm font-semibold text-gray-700 border-t border-gray-200">
+              <tfoot className="bg-gray-50 dark:bg-gray-900 text-sm font-semibold text-gray-700 dark:text-gray-200 border-t border-gray-200 dark:border-gray-700">
                 <tr>
-                  <td colSpan={3} className="px-4 py-3 text-right text-xs uppercase text-gray-500 tracking-wide">Totals</td>
+                  <td colSpan={3} className="px-4 py-3 text-right text-xs uppercase text-gray-500 dark:text-gray-400 tracking-wide">Totals</td>
                   <td className="px-4 py-3 text-right">{totalBoxes.toLocaleString()}</td>
                   <td className="px-4 py-3 text-right">{totalKilos.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 })}</td>
                   <td className="px-4 py-3 text-right">{totalBoxes > 0 ? (totalKilos / totalBoxes).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</td>
@@ -396,16 +396,16 @@ export default function PurchaseOrderDetail() {
       {/* ── Line Item Modal ── */}
       {lineModal && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-lg mx-4">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="font-semibold text-gray-800">{editLineId ? 'Edit Stock Entry' : 'Add Stock Entry'}</h2>
-              <button onClick={() => setLineModal(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-lg mx-4">
+            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+              <h2 className="font-semibold text-gray-800 dark:text-gray-100">{editLineId ? 'Edit Stock Entry' : 'Add Stock Entry'}</h2>
+              <button onClick={() => setLineModal(false)} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 text-xl leading-none">&times;</button>
             </div>
             <form onSubmit={saveLine} className="px-6 py-4 space-y-3">
               {lineError && <p className="text-red-500 text-xs">{lineError}</p>}
 
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Item *</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Item *</label>
                 <ItemCombobox
                   items={items}
                   value={lineForm.item_id}
@@ -417,7 +417,7 @@ export default function PurchaseOrderDetail() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-medium text-gray-600">Storage *</label>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">Storage *</label>
                     <button
                       type="button"
                       onClick={() => {
@@ -436,20 +436,20 @@ export default function PurchaseOrderDetail() {
                     value={lineForm.storage}
                     disabled={!storageOverride}
                     onChange={(e) => setLineForm({ ...lineForm, storage: e.target.value })}
-                    className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${storageOverride ? 'border-gray-300' : 'border-gray-200 bg-gray-50 text-gray-500 cursor-not-allowed'}`}
+                    className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${storageOverride ? 'border-gray-300 dark:border-gray-600' : 'border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400 cursor-not-allowed'}`}
                   >
                     {storageOptions.map((s) => <option key={s}>{s}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Batch # (auto)</label>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Batch # (auto)</label>
                   <input
                     type="text"
                     value={lineForm.batch_number}
                     readOnly
                     tabIndex={-1}
                     placeholder="Select an item"
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-gray-50 text-gray-500 cursor-not-allowed"
+                    className="w-full border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-sm bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400 cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -460,9 +460,9 @@ export default function PurchaseOrderDetail() {
               </div>
 
               {(lineForm.boxes || lineForm.kilos) && (
-                <p className="text-xs text-right text-gray-500">
+                <p className="text-xs text-right text-gray-500 dark:text-gray-400">
                   Avg per box:{' '}
-                  <span className="font-semibold text-gray-700">
+                  <span className="font-semibold text-gray-700 dark:text-gray-200">
                     {Number(lineForm.boxes) > 0 && Number(lineForm.kilos) > 0
                       ? `${(Number(lineForm.kilos) / Number(lineForm.boxes)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg/box`
                       : '—'}
@@ -471,7 +471,7 @@ export default function PurchaseOrderDetail() {
               )}
 
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setLineModal(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
+                <button type="button" onClick={() => setLineModal(false)} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800">Cancel</button>
                 <button type="submit" disabled={savingLine} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg">
                   {savingLine ? 'Saving…' : 'Save'}
                 </button>
@@ -493,39 +493,39 @@ export default function PurchaseOrderDetail() {
       {/* Quick-add Item Modal */}
       {quickAddOpen && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60]">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="font-semibold text-gray-800">New Item</h2>
-              <button onClick={() => setQuickAddOpen(false)} className="text-gray-400 hover:text-gray-600 text-xl leading-none">&times;</button>
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm mx-4">
+            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
+              <h2 className="font-semibold text-gray-800 dark:text-gray-100">New Item</h2>
+              <button onClick={() => setQuickAddOpen(false)} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 text-xl leading-none">&times;</button>
             </div>
             <form onSubmit={saveQuickAddItem} className="px-6 py-4 space-y-3">
               {quickAddError && <p className="text-red-500 text-xs">{quickAddError}</p>}
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Item *</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Item *</label>
                 <input
                   type="text"
                   autoFocus
                   value={quickAddForm.base_name}
                   onChange={(e) => setQuickAddForm({ ...quickAddForm, base_name: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Brand</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Brand</label>
                 <input
                   type="text"
                   value={quickAddForm.brand}
                   onChange={(e) => setQuickAddForm({ ...quickAddForm, brand: e.target.value })}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               {quickAddForm.base_name.trim() && (
-                <p className="text-xs text-gray-500">
-                  Saved as: <span className="font-semibold text-gray-700">{buildItemName(quickAddForm.base_name, quickAddForm.brand)}</span>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Saved as: <span className="font-semibold text-gray-700 dark:text-gray-200">{buildItemName(quickAddForm.base_name, quickAddForm.brand)}</span>
                 </p>
               )}
               <div className="flex justify-end gap-2 pt-2">
-                <button type="button" onClick={() => setQuickAddOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
+                <button type="button" onClick={() => setQuickAddOpen(false)} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800">Cancel</button>
                 <button type="submit" disabled={quickAddSaving} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg">
                   {quickAddSaving ? 'Saving…' : 'Save & Select'}
                 </button>
@@ -538,13 +538,13 @@ export default function PurchaseOrderDetail() {
       {/* Delete Line Confirmation */}
       {deleteLineTarget && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
-            <h2 className="font-semibold text-gray-800 mb-2">Delete this entry?</h2>
-            <p className="text-sm text-gray-500 mb-4">
-              <span className="font-medium text-gray-700">{deleteLineTarget.items?.name}</span> — Batch {deleteLineTarget.batch_number} will be removed.
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
+            <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-2">Delete this entry?</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              <span className="font-medium text-gray-700 dark:text-gray-200">{deleteLineTarget.items?.name}</span> — Batch {deleteLineTarget.batch_number} will be removed.
             </p>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setDeleteLineTarget(null)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
+              <button onClick={() => setDeleteLineTarget(null)} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800">Cancel</button>
               <button onClick={deleteLine} className="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-lg">Delete</button>
             </div>
           </div>
@@ -554,13 +554,13 @@ export default function PurchaseOrderDetail() {
       {/* Delete PO Confirmation */}
       {deletePOConfirm && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
-            <h2 className="font-semibold text-gray-800 mb-2">Delete this delivery?</h2>
-            <p className="text-sm text-gray-500 mb-4">
-              Delivery <span className="font-medium text-gray-700">{po.po_number}</span> and all its stock entries will be permanently deleted.
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-sm mx-4 p-6">
+            <h2 className="font-semibold text-gray-800 dark:text-gray-100 mb-2">Delete this delivery?</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              Delivery <span className="font-medium text-gray-700 dark:text-gray-200">{po.po_number}</span> and all its stock entries will be permanently deleted.
             </p>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setDeletePOConfirm(false)} className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800">Cancel</button>
+              <button onClick={() => setDeletePOConfirm(false)} className="px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-800">Cancel</button>
               <button onClick={deletePO} className="bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-lg">Delete Delivery</button>
             </div>
           </div>
@@ -573,8 +573,8 @@ export default function PurchaseOrderDetail() {
 function InfoRow({ label, value }) {
   return (
     <div>
-      <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">{label}</span>
-      <p className="text-gray-800 mt-0.5">{value ?? '—'}</p>
+      <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">{label}</span>
+      <p className="text-gray-800 dark:text-gray-100 mt-0.5">{value ?? '—'}</p>
     </div>
   )
 }
@@ -589,12 +589,12 @@ const DETAIL_LIST_TITLES = {
 function HField({ label, value, onChange }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+      <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">{label}</label>
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
     </div>
   )
@@ -604,13 +604,13 @@ function HSelect({ label, value, onChange, options, onManage }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <label className="block text-xs font-medium text-gray-600">{label}</label>
+        <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">{label}</label>
         <button type="button" onClick={onManage} className="text-[11px] text-blue-600 hover:underline">Manage</button>
       </div>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       >
         <option value="">— None —</option>
         {options.map((o) => <option key={o}>{o}</option>)}
@@ -623,13 +623,13 @@ function HSelect({ label, value, onChange, options, onManage }) {
 function LField({ label, value, onChange, type = 'text' }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-gray-600 mb-1">{label}</label>
+      <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">{label}</label>
       <input
         type={type}
         step={type === 'number' ? 'any' : undefined}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
     </div>
   )
@@ -658,15 +658,15 @@ function ItemCombobox({ items, value, onSelect, onQuickAdd }) {
         onChange={(e) => { setQuery(e.target.value); setOpen(true) }}
         onFocus={() => setOpen(true)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
-        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
       {open && (
-        <ul className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-52 overflow-y-auto text-sm">
+        <ul className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-52 overflow-y-auto text-sm">
           {filtered.map((i) => (
             <li
               key={i.id}
               onMouseDown={() => { onSelect(i.id); setOpen(false) }}
-              className={`px-3 py-2 cursor-pointer hover:bg-blue-50 ${i.id === value ? 'bg-blue-50 font-medium' : ''}`}
+              className={`px-3 py-2 cursor-pointer hover:bg-blue-50 dark:hover:bg-gray-700/40 ${i.id === value ? 'bg-blue-50 font-medium' : ''}`}
             >
               {i.name}
             </li>
@@ -674,13 +674,13 @@ function ItemCombobox({ items, value, onSelect, onQuickAdd }) {
           {q && !exactMatch && (
             <li
               onMouseDown={() => { onQuickAdd(query); setOpen(false) }}
-              className="px-3 py-2 cursor-pointer text-blue-600 hover:bg-blue-50 border-t border-gray-100"
+              className="px-3 py-2 cursor-pointer text-blue-600 hover:bg-blue-50 dark:hover:bg-gray-700/40 border-t border-gray-100 dark:border-gray-700"
             >
               + Add “{query.trim()}” as new item
             </li>
           )}
           {filtered.length === 0 && !q && (
-            <li className="px-3 py-2 text-gray-400">No items yet — type a name to add one.</li>
+            <li className="px-3 py-2 text-gray-400 dark:text-gray-500">No items yet — type a name to add one.</li>
           )}
         </ul>
       )}
