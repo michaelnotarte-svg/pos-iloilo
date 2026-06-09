@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { money } from '../lib/settings'
-import { fetchListNames, PAYMENT_FALLBACK } from '../lib/lists'
+import { fetchListNames, PAYMENT_FALLBACK, STORAGE_FALLBACK } from '../lib/lists'
 import ManageListModal from '../components/ManageListModal'
 import ManageCustomersModal from '../components/ManageCustomersModal'
 
@@ -19,6 +19,7 @@ const EMPTY_FORM = {
   invoice_number: '',
   customer_id: '',
   date: new Date().toISOString().slice(0, 10),
+  storage: 'Everest',
   sale_type: 'Walk-in',
   status: 'Unpaid',
   payment_method: '',
@@ -36,13 +37,16 @@ export default function Invoices() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [paymentOptions, setPaymentOptions] = useState(PAYMENT_FALLBACK)
+  const [storageOptions, setStorageOptions] = useState(STORAGE_FALLBACK)
   const [managePayment, setManagePayment] = useState(false)
+  const [manageStorage, setManageStorage] = useState(false)
   const [manageCustomers, setManageCustomers] = useState(false)
 
   useEffect(() => { fetchAll(); loadPayments() }, [])
 
   async function loadPayments() {
     setPaymentOptions(await fetchListNames('payment_method', PAYMENT_FALLBACK))
+    setStorageOptions(await fetchListNames('storage', STORAGE_FALLBACK))
   }
 
   async function loadCustomers() {
@@ -86,6 +90,7 @@ export default function Invoices() {
       invoice_number: form.invoice_number.trim(),
       customer_id: form.customer_id || null,
       date: form.date,
+      storage: form.storage,
       sale_type: form.sale_type,
       status: form.status,
       payment_method: form.status === 'Paid' ? (form.payment_method || null) : null,
@@ -220,6 +225,21 @@ export default function Invoices() {
                 </select>
               </div>
 
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">Warehouse *</label>
+                  <button type="button" onClick={() => setManageStorage(true)} className="text-[11px] text-blue-600 hover:underline">Manage</button>
+                </div>
+                <select
+                  value={form.storage}
+                  onChange={(e) => set('storage', e.target.value)}
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  {storageOptions.map((s) => <option key={s}>{s}</option>)}
+                </select>
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">All line items will draw stock from this warehouse (FIFO by batch).</p>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Sale Type</label>
@@ -276,6 +296,15 @@ export default function Invoices() {
           listType="payment_method"
           title="Manage Payment Methods"
           onClose={() => setManagePayment(false)}
+          onChange={loadPayments}
+        />
+      )}
+
+      {manageStorage && (
+        <ManageListModal
+          listType="storage"
+          title="Manage Storage Locations"
+          onClose={() => setManageStorage(false)}
           onChange={loadPayments}
         />
       )}

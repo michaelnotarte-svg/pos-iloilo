@@ -5,6 +5,7 @@ const THEME_KEY = 'pos.theme'
 const CURRENCY_KEY = 'pos.currency'
 const BUSINESS_KEY = 'pos.business'
 const ADMIN_KEY = 'pos.admin'
+const THRESH_KEY = 'pos.thresholds'
 
 export const APP_VERSION = '0.2.0'
 
@@ -70,4 +71,25 @@ export function getAdminMode() {
 
 export function setAdminMode(on) {
   localStorage.setItem(ADMIN_KEY, on ? '1' : '0')
+}
+
+// ── Inventory stock-level thresholds (item-level total kilos) ──
+export function getThresholds() {
+  try {
+    return JSON.parse(localStorage.getItem(THRESH_KEY)) || { critical: 50, low: 200 }
+  } catch {
+    return { critical: 50, low: 200 }
+  }
+}
+
+export function setThresholds(obj) {
+  localStorage.setItem(THRESH_KEY, JSON.stringify(obj))
+}
+
+// Returns 'Critical' | 'Low' | 'Sufficient' for a given kilos value.
+export function stockStatus(kilos, t) {
+  const th = t || getThresholds()
+  if (kilos <= th.critical) return 'Critical'
+  if (kilos <= th.low) return 'Low'
+  return 'Sufficient'
 }

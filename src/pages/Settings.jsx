@@ -7,6 +7,7 @@ import {
   getCurrency, setCurrency,
   getBusiness, setBusiness,
   getAdminMode, setAdminMode,
+  getThresholds, setThresholds,
   money,
 } from '../lib/settings'
 
@@ -31,6 +32,13 @@ export default function Settings() {
   const [business, setBusinessState] = useState(getBusiness())
   const [savedBiz, setSavedBiz] = useState(false)
   const [admin, setAdminState] = useState(getAdminMode())
+  const [thresh, setThreshState] = useState(getThresholds())
+
+  function changeThresh(k, v) {
+    const next = { ...thresh, [k]: Number(v) || 0 }
+    setThreshState(next)
+    setThresholds(next)
+  }
 
   const [manageList, setManageList] = useState(null) // { type, label } | null
 
@@ -119,6 +127,22 @@ export default function Settings() {
               <span className="text-sm text-gray-700 dark:text-gray-200">Enable admin actions on this device</span>
               {admin && <span className="text-[11px] bg-amber-100 text-amber-700 rounded-full px-2 py-0.5">Admin on</span>}
             </label>
+          </Section>
+
+          <Section title="Stock Level Thresholds" desc="Item-level on-hand kilos drive the inventory status flags. Sufficient is anything above the Low line.">
+            <div className="flex flex-wrap items-end gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">🔴 Critical at/below (kg)</label>
+                <input type="number" step="any" value={thresh.critical} onChange={(e) => changeThresh('critical', e.target.value)}
+                  className="w-40 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">🟠 Low at/below (kg)</label>
+                <input type="number" step="any" value={thresh.low} onChange={(e) => changeThresh('low', e.target.value)}
+                  className="w-40 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+              <p className="text-xs text-gray-400 dark:text-gray-500 pb-2">🟢 Sufficient &gt; {thresh.low} kg</p>
+            </div>
           </Section>
         </div>
       )}

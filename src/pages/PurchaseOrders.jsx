@@ -30,6 +30,13 @@ export default function PurchaseOrders() {
   const [sourceOptions, setSourceOptions] = useState([])
   const [manageList, setManageList] = useState(null) // list_type | null
 
+  // Filters — default to the last 15 days
+  const ago15 = new Date(Date.now() - 15 * 86400000).toISOString().slice(0, 10)
+  const [dateFrom, setDateFrom] = useState(ago15)
+  const [dateTo, setDateTo] = useState('')
+  const [whFilter, setWhFilter] = useState('All')
+  const [catFilter, setCatFilter] = useState('All')
+
   useEffect(() => { fetchOrders(); loadLists() }, [])
 
   async function loadLists() {
@@ -44,17 +51,20 @@ export default function PurchaseOrders() {
     setLoading(true)
     const { data } = await supabase
       .from('purchase_orders')
-      .select('*, stock_entries(boxes, kilos, items(name))')
+      .select('*, stock_entries(boxes, kilos, storage, items(name))')
       .order('date', { ascending: false })
 
     const enriched = (data ?? []).map((po) => {
       const entries = po.stock_entries ?? []
+      const storages = [...new Set(entries.map((e) => e.storage).filter(Boolean))]
       return {
         ...po,
         lineCount:  entries.length,
         totalBoxes: entries.reduce((s, e) => s + (Number(e.boxes) || 0), 0),
         totalKilos: entries.reduce((s, e) => s + (Number(e.kilos) || 0), 0),
         itemList:   [...new Set(entries.map((e) => e.items?.name).filter(Boolean))].join(', '),
+        warehouse:  storages.length ? storages.join(', ') : (po.storage ?? '—'),
+        storages:   storages.length ? storages : (po.storage ? [po.storage] : []),
       }
     })
     setOrders(enriched)
@@ -63,13 +73,25 @@ export default function PurchaseOrders() {
 
   const filtered = orders.filter((o) => {
     const q = search.toLowerCase()
-    return (
+    const searchOK = !q || (
       o.po_number?.toLowerCase().includes(q) ||
       o.supplier?.toLowerCase().includes(q) ||
       o.source?.toLowerCase().includes(q) ||
-      o.category?.toLowerCase().includes(q)
+      o.category?.toLowerCase().includes(q) ||
+      o.itemList?.toLowerCase().includes(q)
     )
+    const dateOK = (!dateFrom || o.date >= dateFrom) && (!dateTo || o.date <= dateTo)
+    const whOK = whFilter === 'All' || (o.storages ?? []).includes(whFilter)
+    const catOK = catFilter === 'All' || o.category === catFilter
+    return searchOK && dateOK && whOK && catOK
   })
+
+  // KPIs over the filtered set
+  const kpiCount = filtered.length
+  const kpiTransfers = filtered.filter((o) => o.category === 'Transfer' || o.from_storage).length
+  const kpiIncoming = kpiCount - kpiTransfers
+  const kpiKilos = filtered.reduce((s, o) => s + o.totalKilos, 0)
+  const kpiBoxes = filtered.reduce((s, o) => s + o.totalBoxes, 0)
 
   function openAdd() {
     setForm(EMPTY_FORM)
@@ -113,8 +135,8 @@ export default function PurchaseOrders() {
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-6 max-w-6xl mx-auto">
+      <div className="flex items-center justify-between mb-5">
         <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">Stocks</h1>
         <button
           onClick={openAdd}
@@ -124,25 +146,64 @@ export default function PurchaseOrders() {
         </button>
       </div>
 
-      <input
-        type="text"
-        placeholder="Search by ref #, supplier, source, category…"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3">
+          <p className="text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500">Deliveries</p>
+          <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{kpiCount}</p>
+          <p className="text-[11px] text-gray-400 dark:text-gray-500">{kpiIncoming} incoming · {kpiTransfers} transfer</p>
+        </div>
+        <div className="rounded-xl border border-blue-200 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/10 px-4 py-3">
+          <p className="text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500">Kilos</p>
+          <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{(kpiKilos / 1000).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-sm font-medium">t</span></p>
+          <p className="text-[11px] text-gray-400 dark:text-gray-500">{kpiKilos.toLocaleString(undefined, { maximumFractionDigits: 0 })} kg</p>
+        </div>
+        <div className="rounded-xl border border-teal-200 dark:border-teal-500/30 bg-teal-50 dark:bg-teal-500/10 px-4 py-3">
+          <p className="text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500">Boxes</p>
+          <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{kpiBoxes.toLocaleString()}</p>
+        </div>
+        <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3">
+          <p className="text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500">Period</p>
+          <p className="text-sm font-semibold text-gray-700 dark:text-gray-200 mt-1">{dateFrom || '…'} → {dateTo || 'now'}</p>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        <input
+          type="text"
+          placeholder="Search ref, supplier, source, item…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="flex-1 min-w-44 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <select value={whFilter} onChange={(e) => setWhFilter(e.target.value)} className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="All">All Warehouses</option>
+          {storageOptions.map((s) => <option key={s}>{s}</option>)}
+        </select>
+        <select value={catFilter} onChange={(e) => setCatFilter(e.target.value)} className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="All">All Categories</option>
+          {categoryOptions.map((c) => <option key={c}>{c}</option>)}
+        </select>
+        <div className="flex items-center gap-1">
+          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <span className="text-gray-400 text-xs">→</span>
+          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+      </div>
 
       {loading ? (
         <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-12">Loading…</p>
       ) : filtered.length === 0 ? (
-        <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-12">No stock deliveries yet.</p>
+        <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-12">No deliveries match the current filters.</p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
           <table className="w-full text-sm">
             <thead className="bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400 uppercase text-xs">
               <tr>
                 <th className="text-left px-4 py-3">Date</th>
-                <th className="text-left px-4 py-3">Source</th>
+                <th className="text-left px-4 py-3">Warehouse</th>
+                <th className="text-left px-4 py-3">Category</th>
                 <th className="text-right px-4 py-3"># Items</th>
                 <th className="text-right px-4 py-3">Total Boxes</th>
                 <th className="text-right px-4 py-3">Total Kilos</th>
@@ -158,7 +219,12 @@ export default function PurchaseOrders() {
                   className="hover:bg-blue-50 dark:hover:bg-gray-700/40 cursor-pointer"
                 >
                   <td className="px-4 py-3 font-medium text-gray-700 dark:text-gray-200">{o.date}</td>
-                  <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{o.source ?? '—'}</td>
+                  <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{o.warehouse}</td>
+                  <td className="px-4 py-3">
+                    {o.category
+                      ? <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${o.category === 'Transfer' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300' : 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300'}`}>{o.category}</span>
+                      : <span className="text-gray-400 dark:text-gray-500">—</span>}
+                  </td>
                   <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">{o.lineCount}</td>
                   <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">{o.totalBoxes > 0 ? o.totalBoxes.toLocaleString() : '—'}</td>
                   <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">{o.totalKilos > 0 ? o.totalKilos.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 3 }) : '—'}</td>

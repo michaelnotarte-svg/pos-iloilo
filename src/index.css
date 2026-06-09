@@ -6,6 +6,13 @@
 @layer base {
   html { background-color: #f9fafb; }
   html.dark { background-color: #0b1020; color-scheme: dark; }
+
+  /* Native <select> trigger + option lists in dark mode (options can't take Tailwind dark: variants) */
+  html.dark select,
+  html.dark option {
+    background-color: #1f2937; /* gray-800 */
+    color: #e5e7eb;            /* gray-200 */
+  }
 }
 
 @media print {

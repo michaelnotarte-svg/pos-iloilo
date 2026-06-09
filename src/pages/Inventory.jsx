@@ -2,9 +2,22 @@ import { useEffect, useState, Fragment } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchListNames, STORAGE_FALLBACK } from '../lib/lists'
 import ManageListModal from '../components/ManageListModal'
-import { getAdminMode } from '../lib/settings'
+import { getAdminMode, getThresholds, stockStatus } from '../lib/settings'
 import { downloadCSV } from '../lib/csv'
 import { fetchMovements } from '../lib/inventory'
+
+const STATUS_STYLE = {
+  'Critical':   'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300',
+  'Low':        'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300',
+  'Sufficient': 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300',
+}
+
+function addDays(iso, n) {
+  if (!iso) return ''
+  const d = new Date(iso + 'T00:00:00')
+  d.setDate(d.getDate() + n)
+  return d.toISOString().slice(0, 10)
+}
 
 const num = (x) => Number(x) || 0
 const kg = (n) => Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -42,8 +55,8 @@ export default function Inventory() {
   const [expandBatch, setExpandBatch] = useState(false)
 
   // Ledger filters
-  const [lStorage, setLStorage] = useState('All')
-  const [lItem, setLItem] = useState('')
+  const [fStorage, setFStorage] = useState('All')
+  const [fItem, setFItem] = useState('')
   const [lFrom, setLFrom] = useState('')
   const [lTo, setLTo] = useState('')
   const [lPage, setLPage] = useState(1)
@@ -97,8 +110,15 @@ export default function Inventory() {
     ...[...new Set(moves.map((m) => m.storage))].filter((s) => s && !storageOptions.includes(s)),
   ]
 
+  // Shared filters (warehouse + item) applied to snapshot, depleted, and ledger
+  const fmoves = moves
+    .filter((m) => fStorage === 'All' || m.storage === fStorage)
+    .filter((m) => !fItem || m.item.toLowerCase().includes(fItem.toLowerCase()))
+
   // Movements up to the "as of" date
-  const upto = moves.filter((m) => m.date <= asOf)
+  const upto = fmoves.filter((m) => m.date <= asOf)
+
+  const thresholds = getThresholds()
 
   // ── Aggregations ─────────────────────────────────────────
   function aggregate(rows, keyFn) {
@@ -121,8 +141,30 @@ export default function Inventory() {
   const landing = aggregate(upto, (m) => m.item_id)
   const warehouse = aggregate(upto, (m) => (expandBatch ? `${m.item_id}|${m.batch}` : m.item_id))
 
+  // Item-level on-hand totals + status (across batches/warehouses, as of date)
+  const itemKilos = Object.fromEntries(landing.map((o) => [o.item_id, o.kilos]))
+  const statusOf = (itemId) => stockStatus(itemKilos[itemId] ?? 0, thresholds)
+  const statusCounts = { Critical: 0, Low: 0, Sufficient: 0 }
+  for (const o of landing) statusCounts[stockStatus(o.kilos, thresholds)]++
+
+  // Items depleted on the selected date (crossed from >0 to <=0)
+  const itemKilosAt = (cutoff) => {
+    const map = {}
+    for (const m of fmoves) {
+      if (m.date <= cutoff) map[m.item_id] = (map[m.item_id] ?? 0) + m.kilos
+    }
+    return map
+  }
+  const nameOf = {}
+  for (const m of fmoves) nameOf[m.item_id] = m.item
+  const prevKilos = itemKilosAt(addDays(asOf, -1))
+  const depletedToday = Object.keys(itemKilos)
+    .filter((id) => (prevKilos[id] ?? 0) > 1e-9 && (itemKilos[id] ?? 0) <= 1e-9)
+    .map((id) => ({ id, name: nameOf[id], before: prevKilos[id] ?? 0, now: itemKilos[id] ?? 0 }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+
   // ── Ledger with running totals ───────────────────────────
-  const asc = moves
+  const asc = fmoves
     .map((m, i) => ({ ...m, _i: i }))
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a._i - b._i))
   const run = {}
@@ -134,8 +176,6 @@ export default function Inventory() {
     m.runKilos = run[m.item_id].kilos
   }
   const ledgerFiltered = asc
-    .filter((m) => (lStorage === 'All' || m.storage === lStorage))
-    .filter((m) => (!lItem || m.item.toLowerCase().includes(lItem.toLowerCase())))
     .filter((m) => (!lFrom || m.date >= lFrom))
     .filter((m) => (!lTo || m.date <= lTo))
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b._i - a._i))
@@ -280,6 +320,36 @@ export default function Inventory() {
         )}
       </div>
 
+      {/* Shared filters (drive snapshot + ledger) */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        <input
+          type="text"
+          placeholder="Filter by item…"
+          value={fItem}
+          onChange={(e) => { setFItem(e.target.value); setLPage(1) }}
+          className="flex-1 min-w-44 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <select
+          value={fStorage}
+          onChange={(e) => { setFStorage(e.target.value); setLPage(1) }}
+          className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="All">All Warehouses</option>
+          {storages.map((s) => <option key={s}>{s}</option>)}
+        </select>
+      </div>
+
+      {/* Status KPI cards (item-level) */}
+      <div className="grid grid-cols-3 gap-3 mb-5">
+        {['Critical', 'Low', 'Sufficient'].map((st) => (
+          <div key={st} className={`rounded-xl border px-4 py-3 ${st === 'Critical' ? 'border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10' : st === 'Low' ? 'border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10' : 'border-green-200 dark:border-green-500/30 bg-green-50 dark:bg-green-500/10'}`}>
+            <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">{st}</p>
+            <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{statusCounts[st]}</p>
+            <p className="text-[11px] text-gray-400 dark:text-gray-500">items</p>
+          </div>
+        ))}
+      </div>
+
       {/* ── Inventory table ── */}
       <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 mb-8">
         {view === 'landing' ? (
@@ -289,18 +359,20 @@ export default function Inventory() {
                 <th className="text-left px-4 py-3">Item</th>
                 <th className="text-right px-4 py-3">#Box</th>
                 <th className="text-right px-4 py-3">#Kilos</th>
+                <th className="text-left px-4 py-3">Status</th>
                 <th className="text-left px-4 py-3">Storage</th>
                 <th className="text-left px-4 py-3">Batches</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
               {landing.length === 0 ? (
-                <tr><td colSpan={5} className="text-center text-gray-400 dark:text-gray-500 py-10">No inventory as of this date.</td></tr>
+                <tr><td colSpan={6} className="text-center text-gray-400 dark:text-gray-500 py-10">No inventory as of this date.</td></tr>
               ) : landing.map((o) => (
                 <tr key={o.item_id} className={`hover:bg-gray-50 dark:hover:bg-gray-700/40 ${neg(o.kilos) ? 'bg-red-50 dark:bg-red-500/10' : ''}`}>
                   <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-100">{o.item}</td>
                   <td className={`px-4 py-3 text-right ${neg(o.boxes) ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-gray-700 dark:text-gray-200'}`}>{bx(o.boxes)}</td>
                   <td className={`px-4 py-3 text-right ${neg(o.kilos) ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-gray-700 dark:text-gray-200'}`}>{kg(o.kilos)}</td>
+                  <td className="px-4 py-3"><span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLE[statusOf(o.item_id)]}`}>{statusOf(o.item_id)}</span></td>
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs">{Object.keys(o.per).join(', ')}</td>
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs font-mono">{[...o.batches].sort().join(', ')}</td>
                 </tr>
@@ -315,6 +387,7 @@ export default function Inventory() {
                 {expandBatch && <th rowSpan={2} className="text-left px-4 py-2 align-bottom">Batch #</th>}
                 <th rowSpan={2} className="text-right px-4 py-2 align-bottom">#Box</th>
                 <th rowSpan={2} className="text-right px-4 py-2 align-bottom">#Kilos</th>
+                <th rowSpan={2} className="text-left px-4 py-2 align-bottom">Status</th>
                 {storages.map((s) => (
                   <th key={s} colSpan={2} className="text-center px-4 py-2 border-l border-gray-200 dark:border-gray-700">{s}</th>
                 ))}
@@ -330,13 +403,14 @@ export default function Inventory() {
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
               {warehouse.length === 0 ? (
-                <tr><td colSpan={4 + storages.length * 2} className="text-center text-gray-400 dark:text-gray-500 py-10">No inventory as of this date.</td></tr>
+                <tr><td colSpan={5 + storages.length * 2} className="text-center text-gray-400 dark:text-gray-500 py-10">No inventory as of this date.</td></tr>
               ) : warehouse.map((o, idx) => (
                 <tr key={idx} className={`hover:bg-gray-50 dark:hover:bg-gray-700/40 ${neg(o.kilos) ? 'bg-red-50 dark:bg-red-500/10' : ''}`}>
                   <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-100">{o.item}</td>
                   {expandBatch && <td className="px-4 py-3 font-mono text-xs text-gray-500 dark:text-gray-400">{o.batch}</td>}
                   <td className={`px-4 py-3 text-right ${neg(o.boxes) ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-gray-700 dark:text-gray-200'}`}>{bx(o.boxes)}</td>
                   <td className={`px-4 py-3 text-right ${neg(o.kilos) ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-gray-700 dark:text-gray-200'}`}>{kg(o.kilos)}</td>
+                  <td className="px-4 py-3"><span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLE[statusOf(o.item_id)]}`}>{statusOf(o.item_id)}</span></td>
                   {storages.map((s) => {
                     const p = o.per[s]
                     return (
@@ -353,26 +427,42 @@ export default function Inventory() {
         )}
       </div>
 
+      {/* ── Depleted on selected date ── */}
+      <div className="mb-8 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
+        <div className="px-4 py-2.5 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
+          <span className="text-gray-500 dark:text-gray-400">📉</span>
+          <span className="text-sm font-semibold text-gray-700 dark:text-gray-200">Depleted on {asOf} ({depletedToday.length})</span>
+        </div>
+        {depletedToday.length === 0 ? (
+          <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-6">No items hit zero on this date.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead className="text-gray-400 dark:text-gray-500 text-xs uppercase">
+              <tr>
+                <th className="text-left px-4 py-2">Item</th>
+                <th className="text-right px-4 py-2">Kilos before</th>
+                <th className="text-right px-4 py-2">Kilos now</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+              {depletedToday.map((d) => (
+                <tr key={d.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
+                  <td className="px-4 py-2.5 font-medium text-gray-800 dark:text-gray-100">{d.name}</td>
+                  <td className="px-4 py-2.5 text-right text-gray-600 dark:text-gray-300">{kg(d.before)}</td>
+                  <td className={`px-4 py-2.5 text-right font-semibold ${d.now < 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-700 dark:text-gray-200'}`}>{kg(d.now)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
       {/* ── Ledger ── */}
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Movement Ledger</h2>
+        <span className="text-xs text-gray-400 dark:text-gray-500">Item &amp; warehouse filters shared with the snapshot above</span>
       </div>
       <div className="flex flex-wrap gap-3 mb-3">
-        <input
-          type="text"
-          placeholder="Filter by item…"
-          value={lItem}
-          onChange={(e) => { setLItem(e.target.value); setLPage(1) }}
-          className="flex-1 min-w-44 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        <select
-          value={lStorage}
-          onChange={(e) => { setLStorage(e.target.value); setLPage(1) }}
-          className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="All">All Warehouses</option>
-          {storages.map((s) => <option key={s}>{s}</option>)}
-        </select>
         <div className="flex items-center gap-2">
           <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">From</label>
           <input
