@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import ManageListModal from '../components/ManageListModal'
+import UsersAdmin from '../components/UsersAdmin'
+import { useAuth } from '../lib/auth'
 import {
   APP_VERSION,
   CURRENCY_OPTIONS,
   getTheme, setTheme,
   getCurrency, setCurrency,
   getBusiness, setBusiness,
-  getAdminMode, setAdminMode,
   getThresholds, setThresholds,
   money,
 } from '../lib/settings'
@@ -25,13 +26,14 @@ const DATA_LISTS = [
 ]
 
 export default function Settings() {
+  const { isAdmin } = useAuth()
+  const tabs = isAdmin ? [...TABS, 'Users'] : TABS
   const [tab, setTab] = useState('Appearance')
 
   const [theme, setThemeState] = useState(getTheme())
   const [currency, setCurrencyState] = useState(getCurrency())
   const [business, setBusinessState] = useState(getBusiness())
   const [savedBiz, setSavedBiz] = useState(false)
-  const [admin, setAdminState] = useState(getAdminMode())
   const [thresh, setThreshState] = useState(getThresholds())
 
   function changeThresh(k, v) {
@@ -69,7 +71,7 @@ export default function Settings() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700 mb-6">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -114,19 +116,6 @@ export default function Settings() {
               ))}
             </select>
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Preview: <span className="font-semibold text-gray-700 dark:text-gray-200">{money(1234.5)}</span></p>
-          </Section>
-
-          <Section title="Admin Mode" desc="Unlocks elevated actions like manual inventory adjustments. Placeholder until real user accounts are added.">
-            <label className="flex items-center gap-3 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={admin}
-                onChange={(e) => { setAdminState(e.target.checked); setAdminMode(e.target.checked) }}
-                className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
-              />
-              <span className="text-sm text-gray-700 dark:text-gray-200">Enable admin actions on this device</span>
-              {admin && <span className="text-[11px] bg-amber-100 text-amber-700 rounded-full px-2 py-0.5">Admin on</span>}
-            </label>
           </Section>
 
           <Section title="Stock Level Thresholds" desc="Item-level on-hand kilos drive the inventory status flags. Sufficient is anything above the Low line.">
@@ -198,6 +187,9 @@ export default function Settings() {
           </dl>
         </Section>
       )}
+
+      {/* ── Users (admin only) ── */}
+      {tab === 'Users' && isAdmin && <UsersAdmin />}
 
       {manageList && (
         <ManageListModal

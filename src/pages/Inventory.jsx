@@ -2,7 +2,8 @@ import { useEffect, useState, Fragment } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchListNames, STORAGE_FALLBACK } from '../lib/lists'
 import ManageListModal from '../components/ManageListModal'
-import { getAdminMode, getThresholds, stockStatus } from '../lib/settings'
+import { getThresholds, stockStatus } from '../lib/settings'
+import { useAuth } from '../lib/auth'
 import { downloadCSV } from '../lib/csv'
 import { fetchMovements } from '../lib/inventory'
 
@@ -69,7 +70,7 @@ export default function Inventory() {
 
   const [manageStorage, setManageStorage] = useState(false)
   const [overrides, setOverrides] = useState([])
-  const isAdmin = getAdminMode()
+  const { isAdmin } = useAuth()
 
   useEffect(() => { fetchAll(); loadOverrides() }, [])
 

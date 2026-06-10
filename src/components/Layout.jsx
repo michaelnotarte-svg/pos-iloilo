@@ -1,4 +1,5 @@
 import { NavLink, Outlet } from 'react-router-dom'
+import { useAuth } from '../lib/auth'
 
 const NAV = [
   { to: '/snapshot',   label: 'Daily Snapshot', icon: '📊' },
@@ -12,6 +13,7 @@ const NAV = [
 ]
 
 export default function Layout() {
+  const { profile, isAdmin, signOut } = useAuth()
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Sidebar */}
@@ -42,9 +44,25 @@ export default function Layout() {
           ))}
         </nav>
 
-        {/* Footer */}
-        <div className="px-5 py-4 border-t border-gray-100 dark:border-gray-700">
-          <p className="text-xs text-gray-400 dark:text-gray-500">Iloilo · v0.2</p>
+        {/* Footer — current user */}
+        <div className="px-5 py-4 border-t border-gray-100 dark:border-gray-700 space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-gray-700 dark:text-gray-200 truncate">{profile?.name ?? profile?.email ?? '—'}</p>
+              <p className="text-[11px] text-gray-400 dark:text-gray-500 truncate">
+                {isAdmin ? 'Admin' : (profile?.tags?.length ? profile.tags.join(', ') : 'Staff')}
+                {profile?.location ? ` · ${profile.location}` : ''}
+              </p>
+            </div>
+            <button
+              onClick={signOut}
+              title="Sign out"
+              className="text-[11px] text-gray-400 dark:text-gray-500 hover:text-red-500 shrink-0"
+            >
+              Sign out
+            </button>
+          </div>
+          <p className="text-[10px] text-gray-300 dark:text-gray-600">v0.2</p>
         </div>
       </aside>
 
