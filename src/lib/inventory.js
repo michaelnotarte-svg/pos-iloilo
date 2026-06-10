@@ -4,15 +4,23 @@ const num = (x) => Number(x) || 0
 
 // Single source of truth for inventory movements, used by the Inventory page
 // and the on-hand helpers in the entry forms.
+// Pass `location` to scope everything to one branch.
 // Returns an array of { date, item_id, item, batch, storage, boxes, kilos, type }.
-export async function fetchMovements() {
-  const [arch, stock, sales, adj] = await Promise.all([
-    supabase.from('inventory_archive').select('snapshot_date, item_id, batch_number, storage, boxes, kilos, items(name)'),
-    supabase.from('stock_entries').select('date, item_id, batch_number, storage, boxes, kilos, items(name), purchase_orders(from_storage)'),
-    // Sales now come from FIFO batch allocations (per batch), not the raw line
-    supabase.from('invoice_line_allocations').select('date, item_id, batch_number, storage, boxes, kilos, items(name)'),
-    supabase.from('inventory_adjustments').select('date, item_id, batch_number, storage, boxes, kilos, items(name)'),
-  ])
+export async function fetchMovements(location = null) {
+  let archQ = supabase.from('inventory_archive').select('snapshot_date, item_id, batch_number, storage, boxes, kilos, items(name)')
+  let stockQ = supabase.from('stock_entries').select('date, item_id, batch_number, storage, boxes, kilos, items(name), purchase_orders!inner(from_storage, location)')
+  // Sales come from FIFO batch allocations (per batch), not the raw line
+  let salesQ = supabase.from('invoice_line_allocations').select('date, item_id, batch_number, storage, boxes, kilos, items(name), invoices!inner(location)')
+  let adjQ = supabase.from('inventory_adjustments').select('date, item_id, batch_number, storage, boxes, kilos, items(name)')
+
+  if (location) {
+    archQ = archQ.eq('location', location)
+    stockQ = stockQ.eq('purchase_orders.location', location)
+    salesQ = salesQ.eq('invoices.location', location)
+    adjQ = adjQ.eq('location', location)
+  }
+
+  const [arch, stock, sales, adj] = await Promise.all([archQ, stockQ, salesQ, adjQ])
 
   const m = []
   for (const r of arch.data ?? [])

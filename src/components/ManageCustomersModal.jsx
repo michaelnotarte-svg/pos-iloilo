@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../lib/auth'
 
 /**
  * Quick customer manager — add (display + business name) and remove.
@@ -7,6 +8,7 @@ import { supabase } from '../lib/supabase'
  * Props: onClose, onChange (refetch parent customer list)
  */
 export default function ManageCustomersModal({ onClose, onChange }) {
+  const { activeLocation } = useAuth()
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(true)
   const [display, setDisplay] = useState('')
@@ -22,6 +24,7 @@ export default function ManageCustomersModal({ onClose, onChange }) {
     const { data } = await supabase
       .from('customers')
       .select('id, business_name, display_name')
+      .eq('location', activeLocation)
       .order('business_name')
     setCustomers(data ?? [])
     setLoading(false)
@@ -36,6 +39,7 @@ export default function ManageCustomersModal({ onClose, onChange }) {
     const { error: err } = await supabase.from('customers').insert({
       business_name,
       display_name: display.trim() || null,
+      location: activeLocation,
     })
     setSaving(false)
     if (err) { setError(err.message); return }

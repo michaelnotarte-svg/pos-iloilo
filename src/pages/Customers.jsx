@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../lib/auth'
 
 const EMPTY_FORM = {
   business_name: '',
@@ -11,6 +12,7 @@ const EMPTY_FORM = {
 }
 
 export default function Customers() {
+  const { activeLocation } = useAuth()
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -23,13 +25,14 @@ export default function Customers() {
 
   useEffect(() => {
     fetchCustomers()
-  }, [])
+  }, [activeLocation])
 
   async function fetchCustomers() {
     setLoading(true)
     const { data, error } = await supabase
       .from('customers')
       .select('*')
+      .eq('location', activeLocation)
       .order('business_name', { ascending: true })
     if (!error) setCustomers(data)
     setLoading(false)
@@ -76,6 +79,7 @@ export default function Customers() {
     setError('')
     const payload = {
       business_name: form.business_name.trim(),
+      location: activeLocation,
       display_name: form.display_name.trim() || null,
       owner_name: form.owner_name.trim() || null,
       address: form.address.trim() || null,

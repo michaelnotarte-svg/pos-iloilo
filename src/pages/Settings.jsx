@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import ManageListModal from '../components/ManageListModal'
 import UsersAdmin from '../components/UsersAdmin'
 import { useAuth } from '../lib/auth'
@@ -26,20 +26,26 @@ const DATA_LISTS = [
 ]
 
 export default function Settings() {
-  const { isAdmin } = useAuth()
+  const { isAdmin, activeLocation } = useAuth()
   const tabs = isAdmin ? [...TABS, 'Users'] : TABS
   const [tab, setTab] = useState('Appearance')
 
   const [theme, setThemeState] = useState(getTheme())
   const [currency, setCurrencyState] = useState(getCurrency())
-  const [business, setBusinessState] = useState(getBusiness())
+  const [business, setBusinessState] = useState(getBusiness(activeLocation))
   const [savedBiz, setSavedBiz] = useState(false)
-  const [thresh, setThreshState] = useState(getThresholds())
+  const [thresh, setThreshState] = useState(getThresholds(activeLocation))
+
+  // Re-read per-branch settings when the active branch changes
+  useEffect(() => {
+    setBusinessState(getBusiness(activeLocation))
+    setThreshState(getThresholds(activeLocation))
+  }, [activeLocation])
 
   function changeThresh(k, v) {
     const next = { ...thresh, [k]: Number(v) || 0 }
     setThreshState(next)
-    setThresholds(next)
+    setThresholds(next, activeLocation)
   }
 
   const [manageList, setManageList] = useState(null) // { type, label } | null
@@ -56,7 +62,7 @@ export default function Settings() {
 
   function saveBusiness(e) {
     e.preventDefault()
-    setBusiness(business)
+    setBusiness(business, activeLocation)
     setSavedBiz(true)
     setTimeout(() => setSavedBiz(false), 2000)
   }
@@ -118,7 +124,7 @@ export default function Settings() {
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Preview: <span className="font-semibold text-gray-700 dark:text-gray-200">{money(1234.5)}</span></p>
           </Section>
 
-          <Section title="Stock Level Thresholds" desc="Item-level on-hand kilos drive the inventory status flags. Sufficient is anything above the Low line.">
+          <Section title="Stock Level Thresholds" desc={`Per-branch (${activeLocation}). Item-level on-hand kilos drive the inventory status flags. Sufficient is anything above the Low line.`}>
             <div className="flex flex-wrap items-end gap-4">
               <div>
                 <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">🔴 Critical at/below (kg)</label>
@@ -139,7 +145,7 @@ export default function Settings() {
       {/* ── Business ── */}
       {tab === 'Business' && (
         <form onSubmit={saveBusiness} className="space-y-4 max-w-lg">
-          <Section title="Business Information" desc="Shown on invoice headers and printouts (future).">
+          <Section title="Business Information" desc={`Per-branch (${activeLocation}). Shown on invoice headers and printouts (future).`}>
             <div className="space-y-3">
               <BizInput label="Company Name" value={business.name ?? ''} onChange={(v) => bizField('name', v)} />
               <BizInput label="Address" value={business.address ?? ''} onChange={(v) => bizField('address', v)} />

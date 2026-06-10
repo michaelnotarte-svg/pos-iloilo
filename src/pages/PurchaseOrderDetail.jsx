@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { fetchListNames, STORAGE_FALLBACK } from '../lib/lists'
 import ManageListModal from '../components/ManageListModal'
 import { fetchMovements, onHandMap, lookup, inStockItemIds, avgKgBox } from '../lib/inventory'
+import { useAuth } from '../lib/auth'
 
 const EMPTY_LINE = {
   item_id: '',
@@ -22,6 +23,7 @@ function buildItemName(base, brand) {
 export default function PurchaseOrderDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { activeLocation } = useAuth()
 
   const [po, setPo] = useState(null)
   const [lines, setLines] = useState([])
@@ -63,14 +65,14 @@ export default function PurchaseOrderDetail() {
     fetchAll()
     loadStorage()
     loadInventory()
-  }, [id])
+  }, [id, activeLocation])
 
   async function loadInventory() {
-    setInvMap(onHandMap(await fetchMovements()))
+    setInvMap(onHandMap(await fetchMovements(activeLocation)))
   }
 
   async function loadStorage() {
-    setStorageOptions(await fetchListNames('storage', STORAGE_FALLBACK))
+    setStorageOptions(await fetchListNames('storage', STORAGE_FALLBACK, activeLocation))
     setCategoryOptions(await fetchListNames('delivery_category', []))
     setSupplierOptions(await fetchListNames('supplier', []))
     setSourceOptions(await fetchListNames('source', []))
@@ -85,7 +87,7 @@ export default function PurchaseOrderDetail() {
         .select('*, items(name)')
         .eq('po_id', id)
         .order('created_at'),
-      supabase.from('items').select('id, name').order('name'),
+      supabase.from('items').select('id, name').eq('location', activeLocation).order('name'),
     ])
     setPo(poData)
     setHeaderForm({
@@ -161,13 +163,14 @@ export default function PurchaseOrderDetail() {
         name: buildItemName(quickAddForm.base_name, quickAddForm.brand),
         base_name: quickAddForm.base_name.trim(),
         brand: quickAddForm.brand.trim() || null,
+        location: activeLocation,
       })
       .select('id, name')
       .single()
     setQuickAddSaving(false)
     if (err) { setQuickAddError(err.message); return }
     // Refresh the dropdown list, then select the new item
-    const { data: itemsData } = await supabase.from('items').select('id, name').order('name')
+    const { data: itemsData } = await supabase.from('items').select('id, name').eq('location', activeLocation).order('name')
     setItems(itemsData ?? [])
     handleItemChange(data.id)
     setQuickAddOpen(false)

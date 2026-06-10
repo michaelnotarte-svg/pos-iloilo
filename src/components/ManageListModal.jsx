@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../lib/auth'
 
 /**
  * Reusable editor for any list_options list.
@@ -10,6 +11,8 @@ import { supabase } from '../lib/supabase'
  *   onChange  - called after any add/remove so the parent can refetch options
  */
 export default function ManageListModal({ listType, title, onClose, onChange }) {
+  const { activeLocation } = useAuth()
+  const branchScoped = listType === 'storage'
   const [options, setOptions] = useState([])
   const [name, setName] = useState('')
   const [saving, setSaving] = useState(false)
@@ -27,7 +30,8 @@ export default function ManageListModal({ listType, title, onClose, onChange }) 
       .eq('list_type', listType)
       .order('sort_order', { ascending: true })
       .order('name', { ascending: true })
-    setOptions(data ?? [])
+    const rows = (data ?? []).filter((r) => !branchScoped || !r.location || r.location === activeLocation)
+    setOptions(rows)
     setLoading(false)
   }
 
@@ -39,7 +43,7 @@ export default function ManageListModal({ listType, title, onClose, onChange }) 
     const nextOrder = (options.reduce((m, o) => Math.max(m, o.sort_order ?? 0), 0) || 0) + 1
     const { error: err } = await supabase
       .from('list_options')
-      .insert({ list_type: listType, name: name.trim(), sort_order: nextOrder })
+      .insert({ list_type: listType, name: name.trim(), sort_order: nextOrder, location: branchScoped ? activeLocation : null })
     setSaving(false)
     if (err) { setError(err.message); return }
     setName('')

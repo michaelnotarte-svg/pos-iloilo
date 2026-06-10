@@ -49,7 +49,8 @@ export default function UsersAdmin() {
       .from('profiles')
       .update({
         name: p.name?.trim() || null,
-        location: p.location || null,
+        // Admins span all branches — no fixed location
+        location: p.is_admin ? null : (p.location || null),
         tags: p.tags ?? [],
         is_admin: p.is_admin,
       })
@@ -96,16 +97,20 @@ export default function UsersAdmin() {
                   <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5 truncate">{p.email}{p.id === me?.id ? ' · you' : ''}</p>
                 </div>
 
-                {/* Location */}
+                {/* Location — admins span all branches */}
                 <div>
-                  <select
-                    value={p.location ?? ''}
-                    onChange={(e) => update(p.id, 'location', e.target.value)}
-                    className="border border-gray-300 dark:border-gray-600 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">— Branch —</option>
-                    {locations.map((l) => <option key={l}>{l}</option>)}
-                  </select>
+                  {p.is_admin ? (
+                    <span className="inline-block text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded-lg px-2.5 py-1.5">All branches</span>
+                  ) : (
+                    <select
+                      value={p.location ?? ''}
+                      onChange={(e) => update(p.id, 'location', e.target.value)}
+                      className="border border-gray-300 dark:border-gray-600 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">— Branch —</option>
+                      {locations.map((l) => <option key={l}>{l}</option>)}
+                    </select>
+                  )}
                 </div>
 
                 {/* Tags */}

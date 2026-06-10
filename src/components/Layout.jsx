@@ -13,7 +13,7 @@ const NAV = [
 ]
 
 export default function Layout() {
-  const { profile, isAdmin, signOut } = useAuth()
+  const { profile, isAdmin, signOut, locations, activeLocation, setActiveLocation } = useAuth()
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Sidebar */}
@@ -22,6 +22,17 @@ export default function Layout() {
         <div className="px-5 py-5 border-b border-gray-100 dark:border-gray-700">
           <p className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">Meat Dist.</p>
           <p className="text-lg font-bold text-gray-800 dark:text-gray-100 leading-tight">POS System</p>
+          {isAdmin ? (
+            <select
+              value={activeLocation}
+              onChange={(e) => setActiveLocation(e.target.value)}
+              className="mt-2 w-full border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1.5 text-xs font-medium text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {(locations.length ? locations : [activeLocation]).map((l) => <option key={l}>{l}</option>)}
+            </select>
+          ) : (
+            <p className="mt-2 inline-block bg-blue-50 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300 text-xs font-medium px-2 py-0.5 rounded-full">📍 {activeLocation}</p>
+          )}
         </div>
 
         {/* Nav links */}

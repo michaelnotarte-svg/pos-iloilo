@@ -51,17 +51,23 @@ export function money(n) {
   return `${sym}${amount}`
 }
 
-// ── Business info ────────────────────────────────────────
-export function getBusiness() {
+// ── Business info (per branch) ───────────────────────────
+const bizKey = (loc) => (loc ? `${BUSINESS_KEY}.${loc}` : BUSINESS_KEY)
+
+export function getBusiness(location) {
   try {
-    return JSON.parse(localStorage.getItem(BUSINESS_KEY)) || {}
+    return (
+      JSON.parse(localStorage.getItem(bizKey(location))) ||
+      JSON.parse(localStorage.getItem(BUSINESS_KEY)) || // legacy/global fallback
+      {}
+    )
   } catch {
     return {}
   }
 }
 
-export function setBusiness(obj) {
-  localStorage.setItem(BUSINESS_KEY, JSON.stringify(obj))
+export function setBusiness(obj, location) {
+  localStorage.setItem(bizKey(location), JSON.stringify(obj))
 }
 
 // ── Admin mode (placeholder for real role-based auth) ────
@@ -73,17 +79,23 @@ export function setAdminMode(on) {
   localStorage.setItem(ADMIN_KEY, on ? '1' : '0')
 }
 
-// ── Inventory stock-level thresholds (item-level total kilos) ──
-export function getThresholds() {
+// ── Inventory stock-level thresholds (item-level total kilos, per branch) ──
+const threshKey = (loc) => (loc ? `${THRESH_KEY}.${loc}` : THRESH_KEY)
+
+export function getThresholds(location) {
   try {
-    return JSON.parse(localStorage.getItem(THRESH_KEY)) || { critical: 50, low: 200 }
+    return (
+      JSON.parse(localStorage.getItem(threshKey(location))) ||
+      JSON.parse(localStorage.getItem(THRESH_KEY)) || // legacy/global fallback
+      { critical: 50, low: 200 }
+    )
   } catch {
     return { critical: 50, low: 200 }
   }
 }
 
-export function setThresholds(obj) {
-  localStorage.setItem(THRESH_KEY, JSON.stringify(obj))
+export function setThresholds(obj, location) {
+  localStorage.setItem(threshKey(location), JSON.stringify(obj))
 }
 
 // Returns 'Critical' | 'Low' | 'Sufficient' for a given kilos value.

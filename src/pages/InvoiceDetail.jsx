@@ -5,6 +5,7 @@ import { money } from '../lib/settings'
 import { fetchListNames, STORAGE_FALLBACK, PAYMENT_FALLBACK } from '../lib/lists'
 import ManageListModal from '../components/ManageListModal'
 import { fetchMovements, onHandMap, lookup, inStockItemIds, avgKgBox, itemAvgMap, allocateFIFO } from '../lib/inventory'
+import { useAuth } from '../lib/auth'
 
 const SALE_TYPES = ['Walk-in', 'Delivery', 'Out-of-Town']
 const STATUSES = ['Unpaid', 'Partial', 'Paid']
@@ -37,6 +38,7 @@ function fmt(n) {
 export default function InvoiceDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { activeLocation } = useAuth()
 
   const [inv, setInv] = useState(null)
   const [lines, setLines] = useState([])
@@ -77,15 +79,15 @@ export default function InvoiceDetail() {
   const [showAllItems, setShowAllItems] = useState(false)
   const [oversell, setOversell] = useState(null) // { requested, available } | null
 
-  useEffect(() => { fetchAll(); loadLists(); loadInventory() }, [id])
+  useEffect(() => { fetchAll(); loadLists(); loadInventory() }, [id, activeLocation])
 
   async function loadLists() {
-    setStorageOptions(await fetchListNames('storage', STORAGE_FALLBACK))
+    setStorageOptions(await fetchListNames('storage', STORAGE_FALLBACK, activeLocation))
     setPaymentOptions(await fetchListNames('payment_method', PAYMENT_FALLBACK))
   }
 
   async function loadInventory() {
-    const moves = await fetchMovements()
+    const moves = await fetchMovements(activeLocation)
     setInvMap(onHandMap(moves))
     setAvgMap(itemAvgMap(moves))
   }
@@ -112,8 +114,8 @@ export default function InvoiceDetail() {
         supabase.from('invoices').select('*, customers(business_name, display_name)').eq('id', id).single(),
         supabase.from('invoice_lines').select('*, items(name)').eq('invoice_id', id).order('created_at'),
         supabase.from('partial_payments').select('*').eq('invoice_id', id).order('date_paid'),
-        supabase.from('customers').select('id, business_name, display_name').order('business_name'),
-        supabase.from('items').select('id, name').order('name'),
+        supabase.from('customers').select('id, business_name, display_name').eq('location', activeLocation).order('business_name'),
+        supabase.from('items').select('id, name').eq('location', activeLocation).order('name'),
       ])
     setInv(invData)
     setHeaderForm({
@@ -226,6 +228,7 @@ export default function InvoiceDetail() {
       const avail = lookup(invMap, item_id, storage)
       await supabase.from('oversell_overrides').insert({
         invoice_id: id, invoice_number: inv?.invoice_number ?? null,
+        location: activeLocation,
         item_id, item_name: items.find((i) => i.id === item_id)?.name ?? '',
         storage, requested_kilos: kilos, available_kilos: avail.kilos,
         requested_boxes: boxes, available_boxes: avail.boxes,

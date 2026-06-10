@@ -70,15 +70,16 @@ export default function Inventory() {
 
   const [manageStorage, setManageStorage] = useState(false)
   const [overrides, setOverrides] = useState([])
-  const { isAdmin } = useAuth()
+  const { isAdmin, activeLocation } = useAuth()
 
-  useEffect(() => { fetchAll(); loadOverrides() }, [])
+  useEffect(() => { fetchAll(); loadOverrides() }, [activeLocation])
 
   async function loadOverrides() {
     const { data } = await supabase
       .from('oversell_overrides')
       .select('*')
       .eq('status', 'pending')
+      .eq('location', activeLocation)
       .order('created_at', { ascending: false })
     setOverrides(data ?? [])
   }
@@ -91,9 +92,9 @@ export default function Inventory() {
   async function fetchAll() {
     setLoading(true)
     const [valid, itemRes, storages] = await Promise.all([
-      fetchMovements(),
-      supabase.from('items').select('id, name').order('name'),
-      fetchListNames('storage', STORAGE_FALLBACK),
+      fetchMovements(activeLocation),
+      supabase.from('items').select('id, name').eq('location', activeLocation).order('name'),
+      fetchListNames('storage', STORAGE_FALLBACK, activeLocation),
     ])
 
     setMoves(valid)
@@ -119,7 +120,7 @@ export default function Inventory() {
   // Movements up to the "as of" date
   const upto = fmoves.filter((m) => m.date <= asOf)
 
-  const thresholds = getThresholds()
+  const thresholds = getThresholds(activeLocation)
 
   // ── Aggregations ─────────────────────────────────────────
   function aggregate(rows, keyFn) {
@@ -210,6 +211,7 @@ export default function Inventory() {
     setAdjSaving(true)
     setAdjError('')
     const { error: err } = await supabase.from('inventory_adjustments').insert({
+      location: activeLocation,
       date: adjForm.date,
       item_id: adjForm.item_id,
       storage: adjForm.storage,

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { fetchListNames, STORAGE_FALLBACK } from '../lib/lists'
 import ManageListModal from '../components/ManageListModal'
+import { useAuth } from '../lib/auth'
 
 const EMPTY_FORM = {
   po_number: '',
@@ -17,6 +18,7 @@ const EMPTY_FORM = {
 
 export default function PurchaseOrders() {
   const navigate = useNavigate()
+  const { activeLocation } = useAuth()
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -37,10 +39,10 @@ export default function PurchaseOrders() {
   const [whFilter, setWhFilter] = useState('All')
   const [catFilter, setCatFilter] = useState('All')
 
-  useEffect(() => { fetchOrders(); loadLists() }, [])
+  useEffect(() => { fetchOrders(); loadLists() }, [activeLocation])
 
   async function loadLists() {
-    setStorageOptions(await fetchListNames('storage', STORAGE_FALLBACK))
+    setStorageOptions(await fetchListNames('storage', STORAGE_FALLBACK, activeLocation))
     setCategoryOptions(await fetchListNames('delivery_category', []))
     setSupplierOptions(await fetchListNames('supplier', []))
     setSourceOptions(await fetchListNames('source', []))
@@ -52,6 +54,7 @@ export default function PurchaseOrders() {
     const { data } = await supabase
       .from('purchase_orders')
       .select('*, stock_entries(boxes, kilos, storage, items(name))')
+      .eq('location', activeLocation)
       .order('date', { ascending: false })
 
     const enriched = (data ?? []).map((po) => {
@@ -115,6 +118,7 @@ export default function PurchaseOrders() {
     setError('')
     const payload = {
       po_number: form.po_number.trim() || null,
+      location: activeLocation,
       date: form.date,
       storage: form.storage,
       from_storage: isTransfer ? form.from_storage : null,

@@ -7,6 +7,8 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [locations, setLocations] = useState([])
+  const [activeLocation, setActiveLocationState] = useState(localStorage.getItem('pos.activeLocation') || 'Iloilo')
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -26,19 +28,26 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     if (!session?.user) return
     let active = true
-    supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', session.user.id)
-      .single()
-      .then(({ data }) => {
-        if (active) {
-          setProfile(data ?? null)
-          setLoading(false)
-        }
-      })
+    Promise.all([
+      supabase.from('profiles').select('*').eq('id', session.user.id).single(),
+      supabase.from('locations').select('name').order('name'),
+    ]).then(([{ data: prof }, { data: locs }]) => {
+      if (!active) return
+      setProfile(prof ?? null)
+      setLocations((locs ?? []).map((l) => l.name))
+      // Staff are locked to their assigned branch; admin keeps last choice
+      if (prof && !prof.is_admin && prof.location) setActiveLocationState(prof.location)
+      setLoading(false)
+    })
     return () => { active = false }
   }, [session?.user?.id])
+
+  function setActiveLocation(loc) {
+    // Only admins may switch branches
+    if (!profile?.is_admin) return
+    localStorage.setItem('pos.activeLocation', loc)
+    setActiveLocationState(loc)
+  }
 
   const value = {
     session,
@@ -47,6 +56,9 @@ export function AuthProvider({ children }) {
     isAdmin: !!profile?.is_admin,
     location: profile?.location ?? null,
     tags: profile?.tags ?? [],
+    locations,
+    activeLocation,
+    setActiveLocation,
     signOut: () => supabase.auth.signOut(),
   }
 

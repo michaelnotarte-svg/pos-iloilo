@@ -1,9 +1,11 @@
 import { getBusiness } from '../lib/settings'
+import { useAuth } from '../lib/auth'
 
 // Reusable letterhead for all printable reports:
 //   business name + address + email/phone on the left, date on the upper-right.
 export default function ReportLetterhead({ date, subtitle }) {
-  const b = getBusiness()
+  const { activeLocation } = useAuth()
+  const b = getBusiness(activeLocation)
   const phone = b.phone || b.contact
   const prettyDate = date
     ? new Date(date + 'T00:00:00').toLocaleDateString(undefined, {

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { fetchListNames } from '../lib/lists'
 import ManageListModal from '../components/ManageListModal'
+import { useAuth } from '../lib/auth'
 
 const EMPTY_FORM = { base_name: '', brand: '', category: '' }
 
@@ -12,6 +13,7 @@ function buildName(base, brand) {
 }
 
 export default function Items() {
+  const { activeLocation } = useAuth()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -26,7 +28,7 @@ export default function Items() {
   const [brandOptions, setBrandOptions] = useState([])
   const [manageList, setManageList] = useState(null)
 
-  useEffect(() => { fetchItems(); loadCategories() }, [])
+  useEffect(() => { fetchItems(); loadCategories() }, [activeLocation])
 
   async function loadCategories() {
     setCategoryOptions(await fetchListNames('item_category', []))
@@ -36,7 +38,7 @@ export default function Items() {
 
   async function fetchItems() {
     setLoading(true)
-    const { data } = await supabase.from('items').select('*').order('name')
+    const { data } = await supabase.from('items').select('*').eq('location', activeLocation).order('name')
     setItems(data ?? [])
     setLoading(false)
   }
@@ -78,6 +80,7 @@ export default function Items() {
       base_name: form.base_name.trim(),
       brand: form.brand.trim() || null,
       category: form.category.trim() || null,
+      location: activeLocation,
     }
     let err
     if (editId) {

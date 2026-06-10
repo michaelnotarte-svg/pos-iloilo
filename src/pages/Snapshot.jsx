@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../lib/auth'
 import { money } from '../lib/settings'
 import { downloadCSV } from '../lib/csv'
 import ReportLetterhead from '../components/ReportLetterhead'
@@ -18,17 +19,18 @@ function mopOf(inv) {
 }
 
 export default function Snapshot() {
+  const { activeLocation } = useAuth()
   const [date, setDate] = useState('')
   const [invoices, setInvoices] = useState([])
   const [expenses, setExpenses] = useState([])
   const [stock, setStock] = useState([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => { initDate() }, [])
-  useEffect(() => { if (date) fetchDay() }, [date]) // eslint-disable-line
+  useEffect(() => { initDate() }, [activeLocation])
+  useEffect(() => { if (date) fetchDay() }, [date, activeLocation]) // eslint-disable-line
 
   async function initDate() {
-    const { data } = await supabase.from('invoices').select('date').order('date', { ascending: false }).limit(1)
+    const { data } = await supabase.from('invoices').select('date').eq('location', activeLocation).order('date', { ascending: false }).limit(1)
     setDate(data?.[0]?.date || new Date().toISOString().slice(0, 10))
   }
 
@@ -39,9 +41,10 @@ export default function Snapshot() {
         .from('invoices')
         .select('*, customers(display_name, business_name), invoice_lines(*, items(name))')
         .eq('date', date)
+        .eq('location', activeLocation)
         .order('invoice_number'),
-      supabase.from('expenses').select('description, category, amount').eq('date', date).order('amount', { ascending: false }),
-      supabase.from('stock_entries').select('boxes, kilos, item_id, storage, batch_number, items(name), purchase_orders(source)').eq('date', date),
+      supabase.from('expenses').select('description, category, amount').eq('date', date).eq('location', activeLocation).order('amount', { ascending: false }),
+      supabase.from('stock_entries').select('boxes, kilos, item_id, storage, batch_number, items(name), purchase_orders!inner(source, location)').eq('date', date).eq('purchase_orders.location', activeLocation),
     ])
     setInvoices(inv.data ?? [])
     setExpenses(exp.data ?? [])

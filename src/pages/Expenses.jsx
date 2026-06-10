@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { useAuth } from '../lib/auth'
 import { money } from '../lib/settings'
 
 const EMPTY_FORM = {
@@ -41,6 +42,7 @@ function periodRanges(now) {
 }
 
 export default function Expenses() {
+  const { activeLocation } = useAuth()
   const [expenses, setExpenses] = useState([])
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
@@ -61,12 +63,12 @@ export default function Expenses() {
   const [monthFilter, setMonthFilter] = useState('All')
   const [page, setPage] = useState(1)
 
-  useEffect(() => { fetchAll() }, [])
+  useEffect(() => { fetchAll() }, [activeLocation])
 
   async function fetchAll() {
     setLoading(true)
     const [{ data: expData }, { data: catData }] = await Promise.all([
-      supabase.from('expenses').select('*').order('date', { ascending: false }),
+      supabase.from('expenses').select('*').eq('location', activeLocation).order('date', { ascending: false }),
       supabase.from('expense_categories').select('*').order('name'),
     ])
     setExpenses(expData ?? [])
@@ -137,6 +139,7 @@ export default function Expenses() {
     setSaving(true)
     setError('')
     const payload = {
+      location: activeLocation,
       date: form.date,
       description: form.description.trim(),
       amount: Number(form.amount),

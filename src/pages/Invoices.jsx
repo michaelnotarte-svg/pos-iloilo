@@ -5,6 +5,7 @@ import { money } from '../lib/settings'
 import { fetchListNames, PAYMENT_FALLBACK, STORAGE_FALLBACK } from '../lib/lists'
 import ManageListModal from '../components/ManageListModal'
 import ManageCustomersModal from '../components/ManageCustomersModal'
+import { useAuth } from '../lib/auth'
 
 const SALE_TYPES = ['Walk-in', 'Delivery', 'Out-of-Town']
 const STATUSES = ['Unpaid', 'Partial', 'Paid']
@@ -27,6 +28,7 @@ const EMPTY_FORM = {
 
 export default function Invoices() {
   const navigate = useNavigate()
+  const { activeLocation } = useAuth()
   const [invoices, setInvoices] = useState([])
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -42,15 +44,15 @@ export default function Invoices() {
   const [manageStorage, setManageStorage] = useState(false)
   const [manageCustomers, setManageCustomers] = useState(false)
 
-  useEffect(() => { fetchAll(); loadPayments() }, [])
+  useEffect(() => { fetchAll(); loadPayments() }, [activeLocation])
 
   async function loadPayments() {
     setPaymentOptions(await fetchListNames('payment_method', PAYMENT_FALLBACK))
-    setStorageOptions(await fetchListNames('storage', STORAGE_FALLBACK))
+    setStorageOptions(await fetchListNames('storage', STORAGE_FALLBACK, activeLocation))
   }
 
   async function loadCustomers() {
-    const { data } = await supabase.from('customers').select('id, business_name, display_name').order('business_name')
+    const { data } = await supabase.from('customers').select('id, business_name, display_name').eq('location', activeLocation).order('business_name')
     setCustomers(data ?? [])
   }
 
@@ -60,8 +62,9 @@ export default function Invoices() {
       supabase
         .from('invoices')
         .select('*, customers(business_name, display_name), invoice_lines(amount)')
+        .eq('location', activeLocation)
         .order('date', { ascending: false }),
-      supabase.from('customers').select('id, business_name, display_name').order('business_name'),
+      supabase.from('customers').select('id, business_name, display_name').eq('location', activeLocation).order('business_name'),
     ])
     setInvoices(invData ?? [])
     setCustomers(custData ?? [])
@@ -88,6 +91,7 @@ export default function Invoices() {
     setError('')
     const payload = {
       invoice_number: form.invoice_number.trim(),
+      location: activeLocation,
       customer_id: form.customer_id || null,
       date: form.date,
       storage: form.storage,
