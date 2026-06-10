@@ -124,7 +124,7 @@ export default function InvoiceDetail() {
       date: invData?.date ?? '',
       storage: invData?.storage ?? 'Everest',
       sale_type: invData?.sale_type ?? 'Walk-in',
-      status: invData?.status ?? 'Unpaid',
+      notes: invData?.notes ?? '',
     })
     setLines(linesData ?? [])
     setPayments(paymentsData ?? [])
@@ -143,7 +143,7 @@ export default function InvoiceDetail() {
       date: headerForm.date,
       storage: headerForm.storage,
       sale_type: headerForm.sale_type,
-      status: headerForm.status,
+      notes: headerForm.notes?.trim() || null,
     }).eq('id', id)
     setSavingHeader(false)
     setEditingHeader(false)
@@ -238,6 +238,7 @@ export default function InvoiceDetail() {
     setSavingLine(false)
     setOversell(null)
     setLineModal(false)
+    await recomputeStatus()
     fetchAll()
     loadInventory()
   }
@@ -246,7 +247,21 @@ export default function InvoiceDetail() {
     if (!deleteLineTarget) return
     await supabase.from('invoice_lines').delete().eq('id', deleteLineTarget.id)
     setDeleteLineTarget(null)
+    await recomputeStatus()
     fetchAll()
+    loadInventory()
+  }
+
+  // Derive invoice status from current line totals vs payments and persist it.
+  async function recomputeStatus() {
+    const [{ data: ls }, { data: ps }] = await Promise.all([
+      supabase.from('invoice_lines').select('amount').eq('invoice_id', id),
+      supabase.from('partial_payments').select('amount_paid').eq('invoice_id', id),
+    ])
+    const total = (ls ?? []).reduce((s, l) => s + (Number(l.amount) || 0), 0)
+    const paid = (ps ?? []).reduce((s, p) => s + (Number(p.amount_paid) || 0), 0)
+    const status = paid <= 1e-9 ? 'Unpaid' : (paid + 1e-9 < total ? 'Partial' : 'Paid')
+    await supabase.from('invoices').update({ status }).eq('id', id)
   }
 
   // ── Payments ──────────────────────────────────────────────
@@ -293,6 +308,7 @@ export default function InvoiceDetail() {
     setSavingPay(false)
     if (err) { setPayError(err.message); return }
     setPayModal(false)
+    await recomputeStatus()
     fetchAll()
   }
 
@@ -300,6 +316,7 @@ export default function InvoiceDetail() {
     if (!deletePayTarget) return
     await supabase.from('partial_payments').delete().eq('id', deletePayTarget.id)
     setDeletePayTarget(null)
+    await recomputeStatus()
     fetchAll()
   }
 
@@ -357,10 +374,10 @@ export default function InvoiceDetail() {
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Customer</label>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Customer *</label>
               <select value={headerForm.customer_id} onChange={(e) => setHeaderForm({ ...headerForm, customer_id: e.target.value })}
                 className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="">— Walk-in —</option>
+                <option value="">— Select a customer —</option>
                 {customers.map((c) => <option key={c.id} value={c.id}>{c.display_name || c.business_name}</option>)}
               </select>
             </div>
@@ -379,13 +396,11 @@ export default function InvoiceDetail() {
                   {SALE_TYPES.map((s) => <option key={s}>{s}</option>)}
                 </select>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Status</label>
-                <select value={headerForm.status} onChange={(e) => setHeaderForm({ ...headerForm, status: e.target.value })}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  {STATUSES.map((s) => <option key={s}>{s}</option>)}
-                </select>
-              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Notes</label>
+              <textarea rows={2} value={headerForm.notes} onChange={(e) => setHeaderForm({ ...headerForm, notes: e.target.value })}
+                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div className="flex gap-2 pt-1">
               <button type="submit" disabled={savingHeader} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg">
@@ -401,6 +416,12 @@ export default function InvoiceDetail() {
             <InfoRow label="Warehouse" value={inv.storage ?? '—'} />
             <InfoRow label="Sale Type" value={inv.sale_type} />
             <InfoRow label="Status" value={inv.status} />
+            {inv.notes && (
+              <div className="col-span-2 sm:col-span-5">
+                <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Notes</span>
+                <p className="text-gray-700 dark:text-gray-200 mt-0.5">{inv.notes}</p>
+              </div>
+            )}
           </div>
         )}
       </div>

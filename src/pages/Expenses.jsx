@@ -60,7 +60,9 @@ export default function Expenses() {
   const [catError, setCatError] = useState('')
   const [deleteCatTarget, setDeleteCatTarget] = useState(null)
 
-  const [monthFilter, setMonthFilter] = useState('All')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const hasDateFilter = !!(dateFrom || dateTo)
   const [page, setPage] = useState(1)
 
   useEffect(() => { fetchAll() }, [activeLocation])
@@ -81,18 +83,13 @@ export default function Expenses() {
     setCategories(data ?? [])
   }
 
-  // Month options for filter
-  const monthOptions = ['All', ...Array.from(
-    new Set(expenses.map((e) => e.date?.slice(0, 7)))
-  ).filter(Boolean).sort((a, b) => b.localeCompare(a))]
+  const filtered = expenses.filter((e) =>
+    (!dateFrom || e.date >= dateFrom) && (!dateTo || e.date <= dateTo)
+  )
 
-  const filtered = monthFilter === 'All'
-    ? expenses
-    : expenses.filter((e) => e.date?.startsWith(monthFilter))
-
-  // Recurring entries always pinned at top (independent of month filter)
+  // Recurring entries always pinned at top (independent of the date filter)
   const recurring = expenses.filter((e) => e.is_recurring)
-  // Regular entries respect the month filter, newest first (query already sorts desc)
+  // Regular entries respect the date filter, newest first (query already sorts desc)
   const regular = filtered.filter((e) => !e.is_recurring)
   const regularTotal = regular.reduce((s, e) => s + Number(e.amount), 0)
   const monthTotal = filtered.reduce((s, e) => s + Number(e.amount), 0)
@@ -204,17 +201,24 @@ export default function Expenses() {
         <KpiCard label="This Quarter" sublabel={`Q${Math.floor(new Date().getMonth() / 3) + 1} ${new Date().getFullYear()}`} value={kpiQuarter} accent="teal" />
       </div>
 
-      {/* Month filter + total */}
-      <div className="flex items-center gap-3 mb-5">
-        <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Month</label>
-        <select
-          value={monthFilter}
-          onChange={(e) => setMonthFilter(e.target.value)}
-          className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          {monthOptions.map((m) => <option key={m}>{m}</option>)}
-        </select>
-        {monthFilter !== 'All' && (
+      {/* Date range filter + total */}
+      <div className="flex flex-wrap items-center gap-2 mb-5">
+        <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">From</label>
+        <input
+          type="date"
+          value={dateFrom}
+          onChange={(e) => { setDateFrom(e.target.value); setPage(1) }}
+          className="border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">To</label>
+        <input
+          type="date"
+          value={dateTo}
+          onChange={(e) => { setDateTo(e.target.value); setPage(1) }}
+          className="border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        {hasDateFilter && <button onClick={() => { setDateFrom(''); setDateTo(''); setPage(1) }} className="text-xs text-blue-600 hover:underline">clear</button>}
+        {hasDateFilter && (
           <span className="ml-auto text-sm font-semibold text-gray-700 dark:text-gray-200">
             Total: {money(monthTotal)}
           </span>
@@ -265,7 +269,7 @@ export default function Expenses() {
                 <tfoot className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
                   <tr>
                     <td colSpan={3} className="px-5 py-3 text-right text-xs uppercase text-gray-500 dark:text-gray-400 tracking-wide font-semibold">
-                      {monthFilter === 'All' ? 'Grand Total' : 'Month Total'}
+                      {hasDateFilter ? 'Range Total' : 'Grand Total'}
                     </td>
                     <td className="px-5 py-3 text-right font-bold text-gray-800 dark:text-gray-100">{money(regularTotal)}</td>
                     <td></td>
