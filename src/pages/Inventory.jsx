@@ -6,6 +6,7 @@ import { getThresholds, stockStatus } from '../lib/settings'
 import { useAuth } from '../lib/auth'
 import { downloadCSV } from '../lib/csv'
 import { fetchMovements } from '../lib/inventory'
+import ReportLetterhead from '../components/ReportLetterhead'
 
 const STATUS_STYLE = {
   'Critical':   'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300',
@@ -228,17 +229,32 @@ export default function Inventory() {
 
   const neg = (n) => n < 0
 
+  function printPDF() {
+    const wasDark = document.documentElement.classList.contains('dark')
+    if (wasDark) document.documentElement.classList.remove('dark')
+    window.print()
+    if (wasDark) document.documentElement.classList.add('dark')
+  }
+
   if (loading) return <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-20">Loading…</p>
 
   return (
     <div className="p-6 max-w-6xl mx-auto">
+      {/* Print-only letterhead */}
+      <div className="hidden print:block mb-4">
+        <ReportLetterhead date={asOf} subtitle={`Inventory as of ${asOf}`} />
+      </div>
+
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+      <div className="no-print flex flex-wrap items-center justify-between gap-3 mb-5">
         <div>
           <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">Inventory</h1>
           <p className="text-xs text-gray-400 dark:text-gray-500">Computed from opening balances, deliveries, sales, and adjustments.</p>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={printPDF} className="text-sm border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/40">
+            🖨 Print / PDF
+          </button>
           <button onClick={exportCSV} className="text-sm border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/40">
             ⬇ Export CSV
           </button>
@@ -292,7 +308,7 @@ export default function Inventory() {
       )}
 
       {/* Controls */}
-      <div className="flex flex-wrap items-center gap-3 mb-5">
+      <div className="no-print flex flex-wrap items-center gap-3 mb-5">
         <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
           {[['warehouse', 'Warehouse'], ['landing', 'Summary']].map(([v, label]) => (
             <button
@@ -324,7 +340,7 @@ export default function Inventory() {
       </div>
 
       {/* Shared filters (drive snapshot + ledger) */}
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="no-print flex flex-wrap gap-2 mb-4">
         <input
           type="text"
           placeholder="Filter by item…"
@@ -340,6 +356,9 @@ export default function Inventory() {
           <option value="All">All Warehouses</option>
           {storages.map((s) => <option key={s}>{s}</option>)}
         </select>
+        {(fItem || fStorage !== 'All' || lFrom || lTo) && (
+          <button onClick={() => { setFItem(''); setFStorage('All'); setLFrom(''); setLTo(''); setLPage(1) }} className="text-xs text-blue-600 hover:underline self-center">Reset filters</button>
+        )}
       </div>
 
       {/* Status KPI cards (item-level) */}
@@ -465,7 +484,7 @@ export default function Inventory() {
         <h2 className="text-lg font-semibold text-gray-800 dark:text-gray-100">Movement Ledger</h2>
         <span className="text-xs text-gray-400 dark:text-gray-500">Item &amp; warehouse filters shared with the snapshot above</span>
       </div>
-      <div className="flex flex-wrap gap-3 mb-3">
+      <div className="no-print flex flex-wrap gap-3 mb-3">
         <div className="flex items-center gap-2">
           <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">From</label>
           <input

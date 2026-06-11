@@ -13,7 +13,8 @@
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
       "Bash(node -e ' *)",
-      "Bash(node -)"
+      "Bash(node -)",
+      "Bash(grep -n \"{/\\\\* Controls \\\\*/}\\\\|{/\\\\* Shared filters\\\\|{/\\\\* ── Ledger ── \\\\*/}\\\\|<div className=\\\\\"flex flex-wrap gap-3 mb-3\\\\\">\" src/pages/Inventory.jsx)"
     ]
   }
 }

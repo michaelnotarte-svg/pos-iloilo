@@ -62,8 +62,15 @@ export default function Expenses() {
 
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [catFilter, setCatFilter] = useState('All')
+  const [search, setSearch] = useState('')
   const hasDateFilter = !!(dateFrom || dateTo)
+  const anyFilter = hasDateFilter || catFilter !== 'All' || !!search
   const [page, setPage] = useState(1)
+
+  function resetFilters() {
+    setDateFrom(''); setDateTo(''); setCatFilter('All'); setSearch(''); setPage(1)
+  }
 
   useEffect(() => { fetchAll() }, [activeLocation])
 
@@ -83,9 +90,13 @@ export default function Expenses() {
     setCategories(data ?? [])
   }
 
-  const filtered = expenses.filter((e) =>
-    (!dateFrom || e.date >= dateFrom) && (!dateTo || e.date <= dateTo)
-  )
+  const filtered = expenses.filter((e) => {
+    const q = search.toLowerCase()
+    const matchSearch = !q || e.description?.toLowerCase().includes(q) || e.category?.toLowerCase().includes(q)
+    const matchCat = catFilter === 'All' || e.category === catFilter
+    const matchDate = (!dateFrom || e.date >= dateFrom) && (!dateTo || e.date <= dateTo)
+    return matchSearch && matchCat && matchDate
+  })
 
   // Recurring entries always pinned at top (independent of the date filter)
   const recurring = expenses.filter((e) => e.is_recurring)
@@ -201,27 +212,29 @@ export default function Expenses() {
         <KpiCard label="This Quarter" sublabel={`Q${Math.floor(new Date().getMonth() / 3) + 1} ${new Date().getFullYear()}`} value={kpiQuarter} accent="teal" />
       </div>
 
-      {/* Date range filter + total */}
+      {/* Filters */}
       <div className="flex flex-wrap items-center gap-2 mb-5">
-        <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">From</label>
         <input
-          type="date"
-          value={dateFrom}
-          onChange={(e) => { setDateFrom(e.target.value); setPage(1) }}
-          className="border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+          type="text"
+          placeholder="Search description or category…"
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(1) }}
+          className="flex-1 min-w-44 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
-        <label className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">To</label>
-        <input
-          type="date"
-          value={dateTo}
-          onChange={(e) => { setDateTo(e.target.value); setPage(1) }}
-          className="border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-        />
-        {hasDateFilter && <button onClick={() => { setDateFrom(''); setDateTo(''); setPage(1) }} className="text-xs text-blue-600 hover:underline">clear</button>}
-        {hasDateFilter && (
-          <span className="ml-auto text-sm font-semibold text-gray-700 dark:text-gray-200">
-            Total: {money(monthTotal)}
-          </span>
+        <select
+          value={catFilter}
+          onChange={(e) => { setCatFilter(e.target.value); setPage(1) }}
+          className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="All">All Categories</option>
+          {categories.map((c) => <option key={c.id}>{c.name}</option>)}
+        </select>
+        <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); setPage(1) }} className="border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <span className="text-gray-400 text-xs">→</span>
+        <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); setPage(1) }} className="border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        {anyFilter && <button onClick={resetFilters} className="text-xs text-blue-600 hover:underline">Reset filters</button>}
+        {anyFilter && (
+          <span className="ml-auto text-sm font-semibold text-gray-700 dark:text-gray-200">Total: {money(monthTotal)}</span>
         )}
       </div>
 

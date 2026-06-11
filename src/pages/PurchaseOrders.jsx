@@ -38,6 +38,9 @@ export default function PurchaseOrders() {
   const [dateTo, setDateTo] = useState('')
   const [whFilter, setWhFilter] = useState('All')
   const [catFilter, setCatFilter] = useState('All')
+  const [viewMode, setViewMode] = useState('summary') // 'summary' | 'items'
+  const anyFilter = !!search || whFilter !== 'All' || catFilter !== 'All' || dateFrom !== ago15 || !!dateTo
+  function resetFilters() { setSearch(''); setWhFilter('All'); setCatFilter('All'); setDateFrom(ago15); setDateTo('') }
 
   useEffect(() => { fetchOrders(); loadLists() }, [activeLocation])
 
@@ -194,12 +197,57 @@ export default function PurchaseOrders() {
           <span className="text-gray-400 text-xs">→</span>
           <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
         </div>
+        <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+          {[['summary', 'Summary'], ['items', 'Items']].map(([v, label]) => (
+            <button key={v} onClick={() => setViewMode(v)} className={`px-3 py-2 text-sm font-medium ${viewMode === v ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/40'}`}>{label}</button>
+          ))}
+        </div>
+        {anyFilter && <button onClick={resetFilters} className="text-xs text-blue-600 hover:underline self-center">Reset filters</button>}
       </div>
 
       {loading ? (
         <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-12">Loading…</p>
       ) : filtered.length === 0 ? (
         <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-12">No deliveries match the current filters.</p>
+      ) : viewMode === 'items' ? (
+        <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400 uppercase text-xs">
+              <tr>
+                <th className="text-left px-4 py-3">Date</th>
+                <th className="text-left px-4 py-3">Category</th>
+                <th className="text-left px-4 py-3">Item</th>
+                <th className="text-left px-4 py-3">Warehouse</th>
+                <th className="text-right px-4 py-3">Boxes</th>
+                <th className="text-right px-4 py-3">Kilos</th>
+                <th className="text-left px-4 py-3">Ref #</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-800">
+              {filtered.flatMap((o) => {
+                const entries = o.stock_entries ?? []
+                if (entries.length === 0) return [(
+                  <tr key={o.id} onClick={() => navigate(`/stocks/${o.id}`)} className="hover:bg-blue-50 dark:hover:bg-gray-700/40 cursor-pointer border-t-2 border-gray-200 dark:border-gray-700">
+                    <td className="px-4 py-2.5 font-medium text-gray-700 dark:text-gray-200">{o.date}</td>
+                    <td className="px-4 py-2.5 text-gray-600 dark:text-gray-300">{o.category ?? '—'}</td>
+                    <td colSpan={5} className="px-4 py-2.5 text-gray-400 dark:text-gray-500 italic">no items</td>
+                  </tr>
+                )]
+                return entries.map((e, idx) => (
+                  <tr key={o.id + '-' + idx} onClick={() => navigate(`/stocks/${o.id}`)} className={`hover:bg-blue-50 dark:hover:bg-gray-700/40 cursor-pointer ${idx === 0 ? 'border-t-2 border-gray-200 dark:border-gray-700' : ''}`}>
+                    <td className="px-4 py-2.5 font-medium text-gray-700 dark:text-gray-200">{idx === 0 ? o.date : ''}</td>
+                    <td className="px-4 py-2.5 text-gray-600 dark:text-gray-300">{idx === 0 ? (o.category ?? '—') : ''}</td>
+                    <td className="px-4 py-2.5 text-gray-800 dark:text-gray-100">{e.items?.name ?? '—'}</td>
+                    <td className="px-4 py-2.5 text-gray-600 dark:text-gray-300">{e.storage}</td>
+                    <td className="px-4 py-2.5 text-right text-gray-600 dark:text-gray-300">{e.boxes != null ? Number(e.boxes).toLocaleString() : '—'}</td>
+                    <td className="px-4 py-2.5 text-right text-gray-600 dark:text-gray-300">{Number(e.kilos).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td className="px-4 py-2.5 text-gray-400 dark:text-gray-500">{idx === 0 ? (o.po_number || '—') : ''}</td>
+                  </tr>
+                ))
+              })}
+            </tbody>
+          </table>
+        </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
           <table className="w-full text-sm">

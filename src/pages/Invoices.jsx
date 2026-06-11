@@ -35,6 +35,9 @@ export default function Invoices() {
   const [statusFilter, setStatusFilter] = useState('All')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [viewMode, setViewMode] = useState('summary') // 'summary' | 'items'
+  const anyFilter = !!search || statusFilter !== 'All' || !!dateFrom || !!dateTo
+  function resetFilters() { setSearch(''); setStatusFilter('All'); setDateFrom(''); setDateTo('') }
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
@@ -62,7 +65,7 @@ export default function Invoices() {
     const [{ data: invData }, { data: custData }] = await Promise.all([
       supabase
         .from('invoices')
-        .select('*, customers(business_name, display_name), invoice_lines(amount), partial_payments(amount_paid)')
+        .select('*, customers(business_name, display_name), invoice_lines(amount, boxes, kilos, batch_number, items(name)), partial_payments(amount_paid)')
         .eq('location', activeLocation)
         .order('date', { ascending: false }),
       supabase.from('customers').select('id, business_name, display_name').eq('location', activeLocation).order('business_name'),
@@ -173,12 +176,61 @@ export default function Invoices() {
           <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className="border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           {(dateFrom || dateTo) && <button onClick={() => { setDateFrom(''); setDateTo('') }} className="text-xs text-blue-600 hover:underline">clear</button>}
         </div>
+        <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+          {[['summary', 'Summary'], ['items', 'Items']].map(([v, label]) => (
+            <button key={v} onClick={() => setViewMode(v)} className={`px-3 py-2 text-sm font-medium ${viewMode === v ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/40'}`}>{label}</button>
+          ))}
+        </div>
+        {anyFilter && <button onClick={resetFilters} className="text-xs text-blue-600 hover:underline self-center">Reset filters</button>}
       </div>
 
       {loading ? (
         <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-12">Loading…</p>
       ) : filtered.length === 0 ? (
         <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-12">No invoices found.</p>
+      ) : viewMode === 'items' ? (
+        <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400 uppercase text-xs">
+              <tr>
+                <th className="text-left px-4 py-3">Invoice #</th>
+                <th className="text-left px-4 py-3">Date</th>
+                <th className="text-left px-4 py-3">Customer</th>
+                <th className="text-left px-4 py-3">Item</th>
+                <th className="text-left px-4 py-3">Batch(es)</th>
+                <th className="text-right px-4 py-3">Boxes</th>
+                <th className="text-right px-4 py-3">Kilos</th>
+                <th className="text-right px-4 py-3">Amount</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-800">
+              {filtered.flatMap((inv) => {
+                const cust = inv.customers ? (inv.customers.display_name || inv.customers.business_name) : 'Walk-in'
+                const lines = inv.invoice_lines ?? []
+                if (lines.length === 0) return [(
+                  <tr key={inv.id} onClick={() => navigate(`/invoices/${inv.id}`)} className="hover:bg-blue-50 dark:hover:bg-gray-700/40 cursor-pointer border-t-2 border-gray-200 dark:border-gray-700">
+                    <td className="px-4 py-2.5 font-medium text-blue-700">{inv.invoice_number}</td>
+                    <td className="px-4 py-2.5 text-gray-600 dark:text-gray-300">{inv.date}</td>
+                    <td className="px-4 py-2.5 text-gray-700 dark:text-gray-200">{cust}</td>
+                    <td colSpan={5} className="px-4 py-2.5 text-gray-400 dark:text-gray-500 italic">no items</td>
+                  </tr>
+                )]
+                return lines.map((l, idx) => (
+                  <tr key={inv.id + '-' + idx} onClick={() => navigate(`/invoices/${inv.id}`)} className={`hover:bg-blue-50 dark:hover:bg-gray-700/40 cursor-pointer ${idx === 0 ? 'border-t-2 border-gray-200 dark:border-gray-700' : ''}`}>
+                    <td className="px-4 py-2.5 font-medium text-blue-700">{idx === 0 ? inv.invoice_number : ''}</td>
+                    <td className="px-4 py-2.5 text-gray-600 dark:text-gray-300">{idx === 0 ? inv.date : ''}</td>
+                    <td className="px-4 py-2.5 text-gray-700 dark:text-gray-200">{idx === 0 ? cust : ''}</td>
+                    <td className="px-4 py-2.5 text-gray-800 dark:text-gray-100">{l.items?.name ?? '—'}</td>
+                    <td className="px-4 py-2.5 font-mono text-xs text-gray-500 dark:text-gray-400">{l.batch_number}</td>
+                    <td className="px-4 py-2.5 text-right text-gray-600 dark:text-gray-300">{l.boxes != null ? Number(l.boxes).toLocaleString() : '—'}</td>
+                    <td className="px-4 py-2.5 text-right text-gray-600 dark:text-gray-300">{Number(l.kilos).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td className="px-4 py-2.5 text-right font-medium text-gray-800 dark:text-gray-100">{money(l.amount)}</td>
+                  </tr>
+                ))
+              })}
+            </tbody>
+          </table>
+        </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
           <table className="w-full text-sm">
