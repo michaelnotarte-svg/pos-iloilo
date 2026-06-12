@@ -71,7 +71,8 @@ export default function Inventory() {
 
   const [manageStorage, setManageStorage] = useState(false)
   const [overrides, setOverrides] = useState([])
-  const { isAdmin, activeLocation } = useAuth()
+  const { isAdmin, activeLocation, canWrite } = useAuth()
+  const canAdjust = canWrite('Inventory')
 
   useEffect(() => { fetchAll(); loadOverrides() }, [activeLocation])
 
@@ -258,7 +259,7 @@ export default function Inventory() {
           <button onClick={exportCSV} className="text-sm border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 px-3 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/40">
             ⬇ Export CSV
           </button>
-          {isAdmin && (
+          {canAdjust && (
             <button
               onClick={() => { setAdjForm({ ...EMPTY_ADJ, storage: storages[0] ?? 'Everest' }); setAdjError(''); setAdjOpen(true) }}
               className="text-sm bg-amber-600 hover:bg-amber-700 text-white font-medium px-3 py-2 rounded-lg"

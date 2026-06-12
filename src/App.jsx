@@ -12,6 +12,7 @@ import Expenses from './pages/Expenses'
 import Inventory from './pages/Inventory'
 import Settings from './pages/Settings'
 import Snapshot from './pages/Snapshot'
+import Executive from './pages/Executive'
 
 function Gate() {
   const { session, loading } = useAuth()
@@ -32,6 +33,7 @@ function Gate() {
         <Route element={<Layout />}>
           <Route path="/" element={<Navigate to="/snapshot" replace />} />
           <Route path="/snapshot" element={<Snapshot />} />
+          <Route path="/executive" element={<Executive />} />
           <Route path="/invoices" element={<Invoices />} />
           <Route path="/invoices/:id" element={<InvoiceDetail />} />
           <Route path="/stocks" element={<PurchaseOrders />} />

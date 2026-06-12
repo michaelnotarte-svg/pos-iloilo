@@ -3,6 +3,7 @@ import { useAuth } from '../lib/auth'
 
 const NAV = [
   { to: '/snapshot',   label: 'Daily Snapshot', icon: '📊' },
+  { to: '/executive',  label: 'Executive Summary', icon: '📈', adminOnly: true },
   { to: '/invoices',   label: 'Invoices',   icon: '🧾' },
   { to: '/stocks',     label: 'Stocks',     icon: '📦' },
   { to: '/inventory',  label: 'Inventory',  icon: '🏬' },
@@ -14,6 +15,7 @@ const NAV = [
 
 export default function Layout() {
   const { profile, isAdmin, signOut, locations, activeLocation, setActiveLocation } = useAuth()
+  const nav = NAV.filter((n) => !n.adminOnly || isAdmin)
   return (
     <div className="flex min-h-screen bg-gray-50 dark:bg-gray-900">
       {/* Sidebar */}
@@ -37,7 +39,7 @@ export default function Layout() {
 
         {/* Nav links */}
         <nav className="flex-1 px-3 py-4 space-y-0.5">
-          {NAV.map(({ to, label, icon }) => (
+          {nav.map(({ to, label, icon }) => (
             <NavLink
               key={to}
               to={to}
