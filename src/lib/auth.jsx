@@ -56,6 +56,14 @@ export function AuthProvider({ children }) {
     isAdmin: !!profile?.is_admin,
     location: profile?.location ?? null,
     tags: profile?.tags ?? [],
+    // Can the current user write to a module? Admin always; else must hold the tag.
+    // Pass one tag or an array (any-match).
+    canWrite: (mods) => {
+      if (profile?.is_admin) return true
+      const have = profile?.tags ?? []
+      const need = Array.isArray(mods) ? mods : [mods]
+      return need.some((m) => have.includes(m))
+    },
     locations,
     activeLocation,
     setActiveLocation,

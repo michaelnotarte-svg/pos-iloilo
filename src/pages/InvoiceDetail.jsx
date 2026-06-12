@@ -38,7 +38,8 @@ function fmt(n) {
 export default function InvoiceDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { activeLocation } = useAuth()
+  const { activeLocation, canWrite } = useAuth()
+  const canEdit = canWrite('Sales')
 
   const [inv, setInv] = useState(null)
   const [lines, setLines] = useState([])
@@ -359,7 +360,7 @@ export default function InvoiceDetail() {
             )}
           </div>
           <div className="flex gap-2">
-            {!editingHeader && (
+            {!editingHeader && canEdit && (
               <>
                 <button onClick={() => setEditingHeader(true)} className="text-sm text-blue-600 hover:underline">Edit</button>
                 <span className="text-gray-300">|</span>
@@ -439,9 +440,9 @@ export default function InvoiceDetail() {
             <h3 className="font-semibold text-gray-800 dark:text-gray-100">Line Items</h3>
             <span className="text-xs text-gray-500 dark:text-gray-400">{lines.length} item{lines.length !== 1 ? 's' : ''} · <span className="font-semibold text-gray-700 dark:text-gray-200">{money(totalAmount)}</span></span>
           </div>
-          <button onClick={openAddLine} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg">
+          {canEdit && <button onClick={openAddLine} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg">
             + Add Item
-          </button>
+          </button>}
         </div>
 
         {lines.length === 0 ? (
@@ -470,8 +471,8 @@ export default function InvoiceDetail() {
                     <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">{money(l.unit_price)}</td>
                     <td className="px-4 py-3 text-right font-semibold text-gray-800 dark:text-gray-100">{money(l.amount)}</td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
-                      <button onClick={() => openEditLine(l)} className="text-blue-600 hover:underline text-xs mr-3">Edit</button>
-                      <button onClick={() => setDeleteLineTarget(l)} className="text-red-500 hover:underline text-xs">Delete</button>
+                      {canEdit && <button onClick={() => openEditLine(l)} className="text-blue-600 hover:underline text-xs mr-3">Edit</button>}
+                      {canEdit && <button onClick={() => setDeleteLineTarget(l)} className="text-red-500 hover:underline text-xs">Delete</button>}
                     </td>
                   </tr>
                 ))}
@@ -494,9 +495,9 @@ export default function InvoiceDetail() {
           <div>
             <h3 className="font-semibold text-gray-800 dark:text-gray-100">Payments</h3>
           </div>
-          <button onClick={openAddPayment} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg">
+          {canEdit && <button onClick={openAddPayment} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg">
             + Add Payment
-          </button>
+          </button>}
         </div>
 
         {payments.length === 0 ? (
@@ -523,8 +524,8 @@ export default function InvoiceDetail() {
                     <td className="px-4 py-3 text-right font-medium text-green-700">{money(p.amount_paid)}</td>
                     <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">{p.remaining_balance != null ? `${money(p.remaining_balance)}` : '—'}</td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
-                      <button onClick={() => openEditPayment(p)} className="text-blue-600 hover:underline text-xs mr-3">Edit</button>
-                      <button onClick={() => setDeletePayTarget(p)} className="text-red-500 hover:underline text-xs">Delete</button>
+                      {canEdit && <button onClick={() => openEditPayment(p)} className="text-blue-600 hover:underline text-xs mr-3">Edit</button>}
+                      {canEdit && <button onClick={() => setDeletePayTarget(p)} className="text-red-500 hover:underline text-xs">Delete</button>}
                     </td>
                   </tr>
                 ))}

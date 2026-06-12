@@ -23,7 +23,8 @@ function buildItemName(base, brand) {
 export default function PurchaseOrderDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { activeLocation } = useAuth()
+  const { activeLocation, canWrite } = useAuth()
+  const canEdit = canWrite('Stocks')
 
   const [po, setPo] = useState(null)
   const [lines, setLines] = useState([])
@@ -261,7 +262,7 @@ export default function PurchaseOrderDetail() {
             Delivery <span className="text-blue-700">{po.po_number}</span>
           </h2>
           <div className="flex gap-2">
-            {!editingHeader && (
+            {!editingHeader && canEdit && (
               <>
                 <button
                   onClick={() => setEditingHeader(true)}
@@ -356,12 +357,12 @@ export default function PurchaseOrderDetail() {
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm">
         <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
           <h3 className="font-semibold text-gray-800 dark:text-gray-100">Stock Entries</h3>
-          <button
+          {canEdit && <button
             onClick={openAddLine}
             className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg"
           >
             + Add Item
-          </button>
+          </button>}
         </div>
 
         {lines.length === 0 ? (
@@ -396,8 +397,8 @@ export default function PurchaseOrderDetail() {
                     <td className="px-4 py-3 text-right text-gray-500 dark:text-gray-400">{l.boxes > 0 ? (Number(l.kilos) / Number(l.boxes)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '—'}</td>
                     <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{l.date}</td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
-                      <button onClick={() => openEditLine(l)} className="text-blue-600 hover:underline text-xs mr-3">Edit</button>
-                      <button onClick={() => setDeleteLineTarget(l)} className="text-red-500 hover:underline text-xs">Delete</button>
+                      {canEdit && <button onClick={() => openEditLine(l)} className="text-blue-600 hover:underline text-xs mr-3">Edit</button>}
+                      {canEdit && <button onClick={() => setDeleteLineTarget(l)} className="text-red-500 hover:underline text-xs">Delete</button>}
                     </td>
                   </tr>
                 ))}

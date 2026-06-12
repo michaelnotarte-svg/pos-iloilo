@@ -27,7 +27,8 @@ const EMPTY_FORM = {
 
 export default function Invoices() {
   const navigate = useNavigate()
-  const { activeLocation } = useAuth()
+  const { activeLocation, canWrite } = useAuth()
+  const canEdit = canWrite('Sales')
   const [invoices, setInvoices] = useState([])
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -135,12 +136,14 @@ export default function Invoices() {
     <div className="p-6 max-w-5xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">Invoices</h1>
+        {canEdit && (
         <button
           onClick={() => { setForm(EMPTY_FORM); setError(''); setModalOpen(true) }}
           className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg"
         >
           + New Invoice
         </button>
+        )}
       </div>
 
       {/* KPI cards */}

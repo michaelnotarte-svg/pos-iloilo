@@ -13,7 +13,8 @@ function buildName(base, brand) {
 }
 
 export default function Items() {
-  const { activeLocation } = useAuth()
+  const { activeLocation, canWrite } = useAuth()
+  const canEdit = canWrite(['Stocks', 'Sales'])
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -105,9 +106,11 @@ export default function Items() {
     <div className="p-6 max-w-3xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">Items</h1>
+        {canEdit && (
         <button onClick={openAdd} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg">
           + Add Item
         </button>
+        )}
       </div>
 
       <input
@@ -140,8 +143,8 @@ export default function Items() {
                   <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{item.brand ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{item.category ?? '—'}</td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <button onClick={() => openEdit(item)} className="text-blue-600 hover:underline text-xs mr-3">Edit</button>
-                    <button onClick={() => setDeleteTarget(item)} className="text-red-500 hover:underline text-xs">Delete</button>
+                    {canEdit && <button onClick={() => openEdit(item)} className="text-blue-600 hover:underline text-xs mr-3">Edit</button>}
+                    {canEdit && <button onClick={() => setDeleteTarget(item)} className="text-red-500 hover:underline text-xs">Delete</button>}
                   </td>
                 </tr>
               ))}

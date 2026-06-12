@@ -42,7 +42,8 @@ function periodRanges(now) {
 }
 
 export default function Expenses() {
-  const { activeLocation } = useAuth()
+  const { activeLocation, canWrite } = useAuth()
+  const canEdit = canWrite('Expense')
   const [expenses, setExpenses] = useState([])
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
@@ -197,12 +198,14 @@ export default function Expenses() {
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">Expenses</h1>
+        {canEdit && (
         <button
           onClick={openAdd}
           className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg"
         >
           + Add Expense
         </button>
+        )}
       </div>
 
       {/* KPI cards */}
@@ -252,7 +255,7 @@ export default function Expenses() {
               <table className="w-full text-sm">
                 <tbody className="divide-y divide-amber-100">
                   {recurring.map((e) => (
-                    <ExpenseRow key={e.id} e={e} onEdit={openEdit} onDelete={setDeleteTarget} />
+                    <ExpenseRow key={e.id} e={e} canEdit={canEdit} onEdit={openEdit} onDelete={setDeleteTarget} />
                   ))}
                 </tbody>
               </table>
@@ -276,7 +279,7 @@ export default function Expenses() {
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
                   {pagedRegular.map((e) => (
-                    <ExpenseRow key={e.id} e={e} onEdit={openEdit} onDelete={setDeleteTarget} />
+                    <ExpenseRow key={e.id} e={e} canEdit={canEdit} onEdit={openEdit} onDelete={setDeleteTarget} />
                   ))}
                 </tbody>
                 <tfoot className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
@@ -503,7 +506,7 @@ const ACCENTS = {
   teal:   'border-teal-200 bg-teal-50 dark:border-teal-500/30 dark:bg-teal-500/10',
 }
 
-function ExpenseRow({ e, onEdit, onDelete }) {
+function ExpenseRow({ e, canEdit, onEdit, onDelete }) {
   return (
     <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
       <td className="px-5 py-3 text-gray-600 dark:text-gray-300 whitespace-nowrap">{e.date}</td>
@@ -515,8 +518,8 @@ function ExpenseRow({ e, onEdit, onDelete }) {
       </td>
       <td className="px-5 py-3 text-right font-medium text-gray-800 dark:text-gray-100">{money(e.amount)}</td>
       <td className="px-5 py-3 text-right whitespace-nowrap">
-        <button onClick={() => onEdit(e)} className="text-blue-600 hover:underline text-xs mr-3">Edit</button>
-        <button onClick={() => onDelete(e)} className="text-red-500 hover:underline text-xs">Delete</button>
+        {canEdit && <button onClick={() => onEdit(e)} className="text-blue-600 hover:underline text-xs mr-3">Edit</button>}
+        {canEdit && <button onClick={() => onDelete(e)} className="text-red-500 hover:underline text-xs">Delete</button>}
       </td>
     </tr>
   )

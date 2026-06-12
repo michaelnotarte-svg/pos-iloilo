@@ -13,7 +13,8 @@ const EMPTY_FORM = {
 }
 
 export default function Customers() {
-  const { activeLocation } = useAuth()
+  const { activeLocation, canWrite } = useAuth()
+  const canEdit = canWrite('Sales')
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -113,12 +114,14 @@ export default function Customers() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">Customers</h1>
+        {canEdit && (
         <button
           onClick={openAdd}
           className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg"
         >
           + Add Customer
         </button>
+        )}
       </div>
 
       {/* Search */}
@@ -159,18 +162,18 @@ export default function Customers() {
                   <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{c.contact ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-600 dark:text-gray-300 max-w-xs truncate">{c.address ?? '—'}</td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
-                    <button
+                    {canEdit && <button
                       onClick={() => openEdit(c)}
                       className="text-blue-600 hover:underline text-xs mr-3"
                     >
                       Edit
-                    </button>
-                    <button
+                    </button>}
+                    {canEdit && <button
                       onClick={() => setDeleteTarget(c)}
                       className="text-red-500 hover:underline text-xs"
                     >
                       Delete
-                    </button>
+                    </button>}
                   </td>
                 </tr>
               ))}

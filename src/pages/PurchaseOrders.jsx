@@ -18,7 +18,8 @@ const EMPTY_FORM = {
 
 export default function PurchaseOrders() {
   const navigate = useNavigate()
-  const { activeLocation } = useAuth()
+  const { activeLocation, canWrite } = useAuth()
+  const canEdit = canWrite('Stocks')
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -145,12 +146,14 @@ export default function PurchaseOrders() {
     <div className="p-6 max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">Stocks</h1>
+        {canEdit && (
         <button
           onClick={openAdd}
           className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg"
         >
           + New Delivery
         </button>
+        )}
       </div>
 
       {/* KPI cards */}
