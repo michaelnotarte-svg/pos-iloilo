@@ -36,8 +36,10 @@ export default function Invoices() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [viewMode, setViewMode] = useState('summary') // 'summary' | 'items'
-  const anyFilter = !!search || statusFilter !== 'All' || !!dateFrom || !!dateTo
-  function resetFilters() { setSearch(''); setStatusFilter('All'); setDateFrom(''); setDateTo('') }
+  const [custType, setCustType] = useState('Customer') // new-invoice filter
+  const [typeView, setTypeView] = useState('Both') // list filter
+  const anyFilter = !!search || statusFilter !== 'All' || !!dateFrom || !!dateTo || typeView !== 'Both'
+  function resetFilters() { setSearch(''); setStatusFilter('All'); setDateFrom(''); setDateTo(''); setTypeView('Both') }
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
@@ -56,7 +58,7 @@ export default function Invoices() {
   }
 
   async function loadCustomers() {
-    const { data } = await supabase.from('customers').select('id, business_name, display_name').eq('location', activeLocation).order('business_name')
+    const { data } = await supabase.from('customers').select('id, business_name, display_name, type').eq('location', activeLocation).order('business_name')
     setCustomers(data ?? [])
   }
 
@@ -65,10 +67,10 @@ export default function Invoices() {
     const [{ data: invData }, { data: custData }] = await Promise.all([
       supabase
         .from('invoices')
-        .select('*, customers(business_name, display_name), invoice_lines(amount, boxes, kilos, batch_number, items(name)), partial_payments(amount_paid)')
+        .select('*, customers(business_name, display_name, type), invoice_lines(amount, boxes, kilos, batch_number, items(name)), partial_payments(amount_paid)')
         .eq('location', activeLocation)
         .order('date', { ascending: false }),
-      supabase.from('customers').select('id, business_name, display_name').eq('location', activeLocation).order('business_name'),
+      supabase.from('customers').select('id, business_name, display_name, type').eq('location', activeLocation).order('business_name'),
     ])
     setInvoices(invData ?? [])
     setCustomers(custData ?? [])
@@ -94,7 +96,8 @@ export default function Invoices() {
       inv.customers?.display_name?.toLowerCase().includes(q)
     const matchStatus = statusFilter === 'All' || derivedStatus(inv) === statusFilter
     const matchDate = (!dateFrom || inv.date >= dateFrom) && (!dateTo || inv.date <= dateTo)
-    return matchSearch && matchStatus && matchDate
+    const matchType = typeView === 'Both' || (inv.customers?.type ?? 'Customer') === typeView
+    return matchSearch && matchStatus && matchDate && matchType
   })
 
   // KPIs over the filtered set — outstanding = Unpaid + Partial balances
@@ -169,6 +172,15 @@ export default function Invoices() {
         >
           <option value="All">All Statuses</option>
           {STATUSES.map((s) => <option key={s}>{s}</option>)}
+        </select>
+        <select
+          value={typeView}
+          onChange={(e) => setTypeView(e.target.value)}
+          className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="Both">Customer + BN</option>
+          <option value="Customer">Customer only</option>
+          <option value="BN">BN only</option>
         </select>
         <div className="flex items-center gap-1">
           <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -284,6 +296,18 @@ export default function Invoices() {
             </div>
             <form onSubmit={handleSave} className="px-6 py-4 space-y-3">
               {error && <p className="text-red-500 text-xs">{error}</p>}
+
+              {/* Customer type — promoted to top; switches the dropdown below */}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Type</label>
+                <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+                  {['Customer', 'BN'].map((t) => (
+                    <button type="button" key={t} onClick={() => { setCustType(t); set('customer_id', '') }} className={`px-5 py-1.5 text-sm font-medium ${custType === t ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/40'}`}>{t}</button>
+                  ))}
+                </div>
+                {custType === 'BN' && <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Owner's draw / internal — prices are optional on line items.</p>}
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Invoice # *</label>
@@ -315,8 +339,8 @@ export default function Invoices() {
                   onChange={(e) => set('customer_id', e.target.value)}
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="">— Select a customer —</option>
-                  {customers.map((c) => (
+                  <option value="">— Select a {custType === 'BN' ? 'BN' : 'customer'} —</option>
+                  {customers.filter((c) => (c.type ?? 'Customer') === custType).map((c) => (
                     <option key={c.id} value={c.id}>{c.display_name || c.business_name}</option>
                   ))}
                 </select>

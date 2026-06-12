@@ -93,6 +93,7 @@ export default function InvoiceDetail() {
   }
 
   const invStorage = inv?.storage || ''
+  const isBN = inv?.customers?.type === 'BN'
   const lineAvail = lookup(invMap, lineForm.item_id, invStorage)
   const inStock = inStockItemIds(invMap, invStorage)
   const itemsForDropdown = items.filter(
@@ -111,7 +112,7 @@ export default function InvoiceDetail() {
     setLoading(true)
     const [{ data: invData }, { data: linesData }, { data: paymentsData }, { data: custData }, { data: itemsData }] =
       await Promise.all([
-        supabase.from('invoices').select('*, customers(business_name, display_name)').eq('id', id).single(),
+        supabase.from('invoices').select('*, customers(business_name, display_name, type)').eq('id', id).single(),
         supabase.from('invoice_lines').select('*, items(name)').eq('invoice_id', id).order('created_at'),
         supabase.from('partial_payments').select('*').eq('invoice_id', id).order('date_paid'),
         supabase.from('customers').select('id, business_name, display_name').eq('location', activeLocation).order('business_name'),
@@ -174,7 +175,12 @@ export default function InvoiceDetail() {
   function saveLine(e) {
     e.preventDefault()
     if (!lineForm.item_id) { setLineError('Select an item.'); return }
-    if (!lineForm.unit_price || !lineForm.kilos) { setLineError('Unit price and kilos are required.'); return }
+    if (!lineForm.kilos || Number(lineForm.kilos) <= 0) { setLineError('Kilos is required.'); return }
+    if (isBN) {
+      if (!lineForm.boxes) { setLineError('Boxes is required for BN entries.'); return }
+    } else if (!lineForm.unit_price) {
+      setLineError('Unit price is required.'); return
+    }
     if (!inv?.storage) { setLineError('Set the invoice warehouse first (Edit the header).'); return }
 
     // Over-sell guard (against on-hand at the invoice warehouse)
@@ -202,7 +208,7 @@ export default function InvoiceDetail() {
 
     const linePayload = {
       invoice_id: id, item_id, storage, batch_number: batchList,
-      unit_price: Number(lineForm.unit_price), boxes, kilos,
+      unit_price: lineForm.unit_price ? Number(lineForm.unit_price) : null, boxes, kilos,
     }
 
     let lineId = editLineId
@@ -564,7 +570,7 @@ export default function InvoiceDetail() {
             <div className="grid grid-cols-3 gap-3">
               <F label="Boxes" value={lineForm.boxes} onChange={(v) => setLineForm({ ...lineForm, boxes: v })} type="number" />
               <F label="Kilos *" value={lineForm.kilos} onChange={(v) => setLineForm({ ...lineForm, kilos: v })} type="number" />
-              <F label="Unit Price *" value={lineForm.unit_price} onChange={(v) => setLineForm({ ...lineForm, unit_price: v })} type="number" />
+              <F label={isBN ? "Unit Price" : "Unit Price *"} value={lineForm.unit_price} onChange={(v) => setLineForm({ ...lineForm, unit_price: v })} type="number" />
             </div>
 
             {/* kg/box auto-compute + health block */}

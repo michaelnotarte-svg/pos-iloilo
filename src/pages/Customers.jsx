@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 
 const EMPTY_FORM = {
+  type: 'Customer',
   business_name: '',
   display_name: '',
   owner_name: '',
@@ -57,6 +58,7 @@ export default function Customers() {
 
   function openEdit(c) {
     setForm({
+      type: c.type ?? 'Customer',
       business_name: c.business_name ?? '',
       display_name: c.display_name ?? '',
       owner_name: c.owner_name ?? '',
@@ -78,6 +80,7 @@ export default function Customers() {
     setSaving(true)
     setError('')
     const payload = {
+      type: form.type,
       business_name: form.business_name.trim(),
       location: activeLocation,
       display_name: form.display_name.trim() || null,
@@ -137,6 +140,7 @@ export default function Customers() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400 uppercase text-xs">
               <tr>
+                <th className="text-left px-4 py-3">Type</th>
                 <th className="text-left px-4 py-3">Display Name</th>
                 <th className="text-left px-4 py-3">Business Name</th>
                 <th className="text-left px-4 py-3">Owner</th>
@@ -148,6 +152,7 @@ export default function Customers() {
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-800">
               {filtered.map((c) => (
                 <tr key={c.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
+                  <td className="px-4 py-3"><span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${c.type === 'BN' ? 'bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300' : 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300'}`}>{c.type ?? 'Customer'}</span></td>
                   <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-100">{c.display_name || c.business_name}</td>
                   <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{c.business_name}</td>
                   <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{c.owner_name ?? '—'}</td>
@@ -184,6 +189,15 @@ export default function Customers() {
             </div>
             <form onSubmit={handleSave} className="px-6 py-4 space-y-3">
               {error && <p className="text-red-500 text-xs">{error}</p>}
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Type</label>
+                <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+                  {['Customer', 'BN'].map((t) => (
+                    <button type="button" key={t} onClick={() => setForm({ ...form, type: t })} className={`px-4 py-1.5 text-sm font-medium ${form.type === t ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/40'}`}>{t}</button>
+                  ))}
+                </div>
+                {form.type === 'BN' && <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Owner's draw / internal — prices are optional on invoices.</p>}
+              </div>
               <Field label="Business Name *" value={form.business_name} onChange={(v) => setForm({ ...form, business_name: v })} />
               <div>
                 <Field label="Display Name" value={form.display_name} onChange={(v) => setForm({ ...form, display_name: v })} />
