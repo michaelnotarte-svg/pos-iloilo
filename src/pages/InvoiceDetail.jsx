@@ -267,7 +267,7 @@ export default function InvoiceDetail() {
     ])
     const total = (ls ?? []).reduce((s, l) => s + (Number(l.amount) || 0), 0)
     const paid = (ps ?? []).reduce((s, p) => s + (Number(p.amount_paid) || 0), 0)
-    const status = paid <= 1e-9 ? 'Unpaid' : (paid + 1e-9 < total ? 'Partial' : 'Paid')
+    const status = total - paid <= 0.01 ? 'Paid' : (paid > 0.01 ? 'Partial' : 'Unpaid')
     await supabase.from('invoices').update({ status }).eq('id', id)
   }
 

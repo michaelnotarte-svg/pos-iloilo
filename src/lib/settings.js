@@ -5,7 +5,7 @@ const THEME_KEY = 'pos.theme'
 const CURRENCY_KEY = 'pos.currency'
 const BUSINESS_KEY = 'pos.business'
 const ADMIN_KEY = 'pos.admin'
-const THRESH_KEY = 'pos.thresholds'
+const THRESH_KEY = 'pos.box_thresholds' // box-based (old 'pos.thresholds' held kg values)
 
 export const APP_VERSION = '0.2.0'
 
@@ -79,18 +79,19 @@ export function setAdminMode(on) {
   localStorage.setItem(ADMIN_KEY, on ? '1' : '0')
 }
 
-// ── Inventory stock-level thresholds (item-level total kilos, per branch) ──
+// ── Inventory stock-level thresholds (item-level total #boxes, per branch) ──
 const threshKey = (loc) => (loc ? `${THRESH_KEY}.${loc}` : THRESH_KEY)
+const DEFAULT_THRESH = { critical: 10, low: 50 }
 
 export function getThresholds(location) {
   try {
     return (
       JSON.parse(localStorage.getItem(threshKey(location))) ||
-      JSON.parse(localStorage.getItem(THRESH_KEY)) || // legacy/global fallback
-      { critical: 50, low: 200 }
+      JSON.parse(localStorage.getItem(THRESH_KEY)) || // global fallback
+      DEFAULT_THRESH
     )
   } catch {
-    return { critical: 50, low: 200 }
+    return DEFAULT_THRESH
   }
 }
 
@@ -98,10 +99,10 @@ export function setThresholds(obj, location) {
   localStorage.setItem(threshKey(location), JSON.stringify(obj))
 }
 
-// Returns 'Critical' | 'Low' | 'Sufficient' for a given kilos value.
-export function stockStatus(kilos, t) {
+// Returns 'Critical' | 'Low' | 'Sufficient' for a given #boxes value.
+export function stockStatus(boxes, t) {
   const th = t || getThresholds()
-  if (kilos <= th.critical) return 'Critical'
-  if (kilos <= th.low) return 'Low'
+  if (boxes <= th.critical) return 'Critical'
+  if (boxes <= th.low) return 'Low'
   return 'Sufficient'
 }

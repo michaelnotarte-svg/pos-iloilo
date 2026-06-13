@@ -124,19 +124,19 @@ export default function Settings() {
             <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">Preview: <span className="font-semibold text-gray-700 dark:text-gray-200">{money(1234.5)}</span></p>
           </Section>
 
-          <Section title="Stock Level Thresholds" desc={`Per-branch (${activeLocation}). Item-level on-hand kilos drive the inventory status flags. Sufficient is anything above the Low line.`}>
+          <Section title="Stock Level Thresholds" desc={`Per-branch (${activeLocation}). Item-level on-hand #boxes drive the inventory status flags. Sufficient is anything above the Low line.`}>
             <div className="flex flex-wrap items-end gap-4">
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">🔴 Critical at/below (kg)</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">🔴 Critical at/below (boxes)</label>
                 <input type="number" step="any" value={thresh.critical} onChange={(e) => changeThresh('critical', e.target.value)}
                   className="w-40 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">🟠 Low at/below (kg)</label>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">🟠 Low at/below (boxes)</label>
                 <input type="number" step="any" value={thresh.low} onChange={(e) => changeThresh('low', e.target.value)}
                   className="w-40 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
-              <p className="text-xs text-gray-400 dark:text-gray-500 pb-2">🟢 Sufficient &gt; {thresh.low} kg</p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 pb-2">🟢 Sufficient &gt; {thresh.low} boxes</p>
             </div>
           </Section>
         </div>

@@ -142,14 +142,25 @@ export default function Inventory() {
     return [...map.values()].sort((a, b) => a.item.localeCompare(b.item) || String(a.batch).localeCompare(String(b.batch)))
   }
 
-  const landing = aggregate(upto, (m) => m.item_id)
-  const warehouse = aggregate(upto, (m) => (expandBatch ? `${m.item_id}|${m.batch}` : m.item_id))
+  const landingAll = aggregate(upto, (m) => m.item_id)
+  const warehouseAll = aggregate(upto, (m) => (expandBatch ? `${m.item_id}|${m.batch}` : m.item_id))
 
-  // Item-level on-hand totals + status (across batches/warehouses, as of date)
-  const itemKilos = Object.fromEntries(landing.map((o) => [o.item_id, o.kilos]))
-  const statusOf = (itemId) => stockStatus(itemKilos[itemId] ?? 0, thresholds)
+  // Depleted (≈0) stock is shown in the "Depleted" section, not the on-hand table.
+  // Negatives (oversold) stay visible as an error state.
+  const EPS = 0.005
+  const hasStock = (o) => Math.abs(o.kilos) >= EPS
+  const byBoxesDesc = (a, b) => b.boxes - a.boxes || a.item.localeCompare(b.item)
+  const landing = landingAll.filter(hasStock).sort(byBoxesDesc)
+  const warehouse = warehouseAll.filter(hasStock).sort(byBoxesDesc)
+
+  // Item-level on-hand totals + status (across batches/warehouses, as of date).
+  // Status is driven by #boxes; depleted-detection (below) stays on kilos.
+  // Keep the full (unfiltered) kilo map for depleted-detection below.
+  const itemKilos = Object.fromEntries(landingAll.map((o) => [o.item_id, o.kilos]))
+  const itemBoxes = Object.fromEntries(landingAll.map((o) => [o.item_id, o.boxes]))
+  const statusOf = (itemId) => stockStatus(itemBoxes[itemId] ?? 0, thresholds)
   const statusCounts = { Critical: 0, Low: 0, Sufficient: 0 }
-  for (const o of landing) statusCounts[stockStatus(o.kilos, thresholds)]++
+  for (const o of landing) statusCounts[stockStatus(o.boxes, thresholds)]++
 
   // Items depleted on the selected date (crossed from >0 to <=0)
   const itemKilosAt = (cutoff) => {

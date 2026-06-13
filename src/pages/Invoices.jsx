@@ -85,8 +85,8 @@ export default function Invoices() {
   const balanceOf = (inv) => grandTotal(inv) - paidOf(inv)
   const derivedStatus = (inv) => {
     const total = grandTotal(inv), paid = paidOf(inv)
-    if (paid <= 1e-9) return 'Unpaid'
-    return paid + 1e-9 < total ? 'Partial' : 'Paid'
+    if (total - paid <= 0.01) return 'Paid' // nothing outstanding (incl. ₱0 owner's-draw/BN)
+    return paid > 0.01 ? 'Partial' : 'Unpaid'
   }
 
   const filtered = invoices.filter((inv) => {

@@ -23,98 +23,94 @@ export default function Executive() {
   const { isAdmin } = useAuth()
   const [d, setD] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
   useEffect(() => { if (isAdmin) load() }, [isAdmin])
 
   async function load() {
     setLoading(true)
-    const [{ data: locRows }, { data: invoices }, { data: expenses }, { data: stock }] = await Promise.all([
+    setError('')
+    const [{ data: locRows }, { data: agg, error: aggErr }] = await Promise.all([
       supabase.from('locations').select('name').order('name'),
-      supabase.from('invoices').select('date, location, invoice_lines(amount, kilos, items(name)), partial_payments(amount_paid), customers(display_name, business_name, type)'),
-      supabase.from('expenses').select('date, location, amount'),
-      supabase.from('stock_entries').select('kilos, purchase_orders!inner(date, location, from_storage)'),
+      supabase.rpc('exec_summary'),
     ])
+    if (aggErr) { setError(aggErr.message); setLoading(false); return }
     const locations = (locRows ?? []).map((l) => l.name)
 
     // Per-location current inventory flags (admin bypasses RLS so fetchMovements(loc) works)
     const flags = {}
     await Promise.all(locations.map(async (loc) => {
       const moves = await fetchMovements(loc)
-      const byItem = {}
-      for (const m of moves) byItem[m.item_id] = (byItem[m.item_id] ?? 0) + m.kilos
+      const byItem = {} // item_id -> { boxes, kilos }
+      for (const m of moves) {
+        const o = byItem[m.item_id] || (byItem[m.item_id] = { boxes: 0, kilos: 0 })
+        o.boxes += m.boxes; o.kilos += m.kilos
+      }
       const th = getThresholds(loc)
       const c = { Critical: 0, Low: 0, Sufficient: 0 }
-      for (const id in byItem) c[stockStatus(byItem[id], th)]++
+      for (const id in byItem) {
+        if (Math.abs(byItem[id].kilos) < 0.005) continue // depleted, not counted (matches Inventory)
+        c[stockStatus(byItem[id].boxes, th)]++
+      }
       flags[loc] = c
     }))
 
-    setD({ locations, invoices: invoices ?? [], expenses: expenses ?? [], stock: stock ?? [], flags })
+    setD({ locations, agg: agg ?? {}, flags })
     setLoading(false)
   }
 
   if (!isAdmin) return <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-20">Executive Summary is available to admins only.</p>
+  if (error) return <p className="text-sm text-red-500 text-center py-20">Failed to load: {error}</p>
   if (loading || !d) return <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-20">Loading…</p>
 
-  const { locations, invoices, expenses, stock, flags } = d
+  const { locations, agg, flags } = d
   const months = lastMonths(6)
   const thisM = months[months.length - 1]
   const prevM = months[months.length - 2]
 
-  // ── Invoice helpers ──
-  const invTotal = (inv) => (inv.invoice_lines ?? []).reduce((s, l) => s + num(l.amount), 0)
-  const invPaid = (inv) => (inv.partial_payments ?? []).reduce((s, p) => s + num(p.amount_paid), 0)
-
-  // ── Sales by location / month ──
+  // ── Sales by location / month (from RPC) ──
   const salesLM = {} // loc -> month -> total
-  for (const inv of invoices) {
-    const loc = inv.location || '—', m = monthKey(inv.date)
+  for (const r of agg.sales_by_loc_month ?? []) {
+    const loc = r.location || '—'
     salesLM[loc] = salesLM[loc] || {}
-    salesLM[loc][m] = (salesLM[loc][m] ?? 0) + invTotal(inv)
+    salesLM[loc][r.month] = (salesLM[loc][r.month] ?? 0) + num(r.total)
   }
   const salesMonth = (m) => locations.reduce((s, loc) => s + (salesLM[loc]?.[m] ?? 0), 0)
   const totalSalesThis = salesMonth(thisM)
   const totalSalesPrev = salesMonth(prevM)
   const salesDelta = totalSalesPrev > 0 ? ((totalSalesThis - totalSalesPrev) / totalSalesPrev) * 100 : null
 
-  // ── Expenses by loc this month ──
-  const expLoc = (loc) => expenses.filter((e) => e.location === loc && monthKey(e.date) === thisM).reduce((s, e) => s + num(e.amount), 0)
-  const totalExpThis = expenses.filter((e) => monthKey(e.date) === thisM).reduce((s, e) => s + num(e.amount), 0)
+  // ── Expenses by loc / month (from RPC) ──
+  const expLM = {}
+  for (const r of agg.expenses_by_loc_month ?? []) {
+    const loc = r.location || '—'
+    expLM[loc] = expLM[loc] || {}
+    expLM[loc][r.month] = (expLM[loc][r.month] ?? 0) + num(r.total)
+  }
+  const expLoc = (loc) => expLM[loc]?.[thisM] ?? 0
+  const totalExpThis = locations.reduce((s, loc) => s + expLoc(loc), 0)
 
-  // ── Stocks in / transferred (this month) by loc ──
+  // ── Stocks in / transferred (this month) by loc (from RPC) ──
   const stocksIn = {}, stocksXfer = {}
-  for (const s of stock) {
-    const po = s.purchase_orders
-    if (!po || monthKey(po.date) !== thisM) continue
-    const loc = po.location || '—'
-    if (po.from_storage) stocksXfer[loc] = (stocksXfer[loc] ?? 0) + num(s.kilos)
-    else stocksIn[loc] = (stocksIn[loc] ?? 0) + num(s.kilos)
+  for (const r of agg.stock_by_loc_month ?? []) {
+    if (r.month !== thisM) continue
+    const loc = r.location || '—'
+    if (r.transfer) stocksXfer[loc] = (stocksXfer[loc] ?? 0) + num(r.kilos)
+    else stocksIn[loc] = (stocksIn[loc] ?? 0) + num(r.kilos)
   }
 
-  // ── Unpaid by loc (all-time outstanding) ──
+  // ── Unpaid by loc (from RPC; BN excluded server-side) ──
   const unpaid = {} // loc -> {count, amount}
   let unpaidCountAll = 0, unpaidAmtAll = 0
-  for (const inv of invoices) {
-    const bal = invTotal(inv) - invPaid(inv)
-    if (bal <= 1e-9) continue
-    const loc = inv.location || '—'
-    unpaid[loc] = unpaid[loc] || { count: 0, amount: 0 }
-    unpaid[loc].count++; unpaid[loc].amount += bal
-    unpaidCountAll++; unpaidAmtAll += bal
+  for (const r of agg.unpaid ?? []) {
+    const loc = r.location || '—'
+    unpaid[loc] = { count: num(r.count), amount: num(r.amount) }
+    unpaidCountAll += num(r.count); unpaidAmtAll += num(r.amount)
   }
 
-  // ── Top customers & items (by sales amount, all-time) ──
-  const custMap = {}, itemMap = {}
-  for (const inv of invoices) {
-    const cname = inv.customers ? (inv.customers.display_name || inv.customers.business_name) : 'Walk-in'
-    custMap[cname] = (custMap[cname] ?? 0) + invTotal(inv)
-    for (const l of inv.invoice_lines ?? []) {
-      const iname = l.items?.name ?? '—'
-      itemMap[iname] = itemMap[iname] || { amount: 0, kilos: 0 }
-      itemMap[iname].amount += num(l.amount); itemMap[iname].kilos += num(l.kilos)
-    }
-  }
-  const topCustomers = Object.entries(custMap).sort((a, b) => b[1] - a[1]).slice(0, 5)
-  const topItems = Object.entries(itemMap).sort((a, b) => b[1].amount - a[1].amount).slice(0, 5)
+  // ── Top customers & items (from RPC) ──
+  const topCustomers = (agg.top_customers ?? []).map((r) => [r.name, num(r.amount)])
+  const topItems = (agg.top_items ?? []).map((r) => [r.name, { amount: num(r.amount), kilos: num(r.kilos) }])
 
   const salesSeries = locations.map((loc, i) => ({ name: loc, color: COLORS[i % COLORS.length], values: months.map((m) => salesLM[loc]?.[m] ?? 0) }))
 

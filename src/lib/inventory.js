@@ -1,4 +1,4 @@
-import { supabase } from './supabase'
+import { supabase, selectAll } from './supabase'
 
 const num = (x) => Number(x) || 0
 
@@ -7,26 +7,33 @@ const num = (x) => Number(x) || 0
 // Pass `location` to scope everything to one branch.
 // Returns an array of { date, item_id, item, batch, storage, boxes, kilos, type }.
 export async function fetchMovements(location = null) {
-  let archQ = supabase.from('inventory_archive').select('snapshot_date, item_id, batch_number, storage, boxes, kilos, items(name)')
-  let stockQ = supabase.from('stock_entries').select('date, item_id, batch_number, storage, boxes, kilos, items(name), purchase_orders!inner(from_storage, location)')
+  const archB = () => {
+    let q = supabase.from('inventory_archive').select('snapshot_date, item_id, batch_number, storage, boxes, kilos, items(name)')
+    return location ? q.eq('location', location) : q
+  }
+  const stockB = () => {
+    let q = supabase.from('stock_entries').select('date, item_id, batch_number, storage, boxes, kilos, items(name), purchase_orders!inner(from_storage, location)')
+    return location ? q.eq('purchase_orders.location', location) : q
+  }
   // Sales come from FIFO batch allocations (per batch), not the raw line
-  let salesQ = supabase.from('invoice_line_allocations').select('date, item_id, batch_number, storage, boxes, kilos, items(name), invoices!inner(location)')
-  let adjQ = supabase.from('inventory_adjustments').select('date, item_id, batch_number, storage, boxes, kilos, items(name)')
-
-  if (location) {
-    archQ = archQ.eq('location', location)
-    stockQ = stockQ.eq('purchase_orders.location', location)
-    salesQ = salesQ.eq('invoices.location', location)
-    adjQ = adjQ.eq('location', location)
+  const salesB = () => {
+    let q = supabase.from('invoice_line_allocations').select('date, item_id, batch_number, storage, boxes, kilos, items(name), invoices!inner(location)')
+    return location ? q.eq('invoices.location', location) : q
+  }
+  const adjB = () => {
+    let q = supabase.from('inventory_adjustments').select('date, item_id, batch_number, storage, boxes, kilos, items(name)')
+    return location ? q.eq('location', location) : q
   }
 
-  const [arch, stock, sales, adj] = await Promise.all([archQ, stockQ, salesQ, adjQ])
+  const [arch, stock, sales, adj] = await Promise.all([
+    selectAll(archB), selectAll(stockB), selectAll(salesB), selectAll(adjB),
+  ])
 
   const m = []
-  for (const r of arch.data ?? [])
+  for (const r of arch ?? [])
     m.push({ date: r.snapshot_date, item_id: r.item_id, item: r.items?.name ?? '—', batch: r.batch_number ?? '—', storage: r.storage, boxes: num(r.boxes), kilos: num(r.kilos), type: 'Opening' })
 
-  for (const r of stock.data ?? []) {
+  for (const r of stock ?? []) {
     const from = r.purchase_orders?.from_storage
     const base = { date: r.date, item_id: r.item_id, item: r.items?.name ?? '—', batch: r.batch_number ?? '—' }
     if (from) {
@@ -38,10 +45,10 @@ export async function fetchMovements(location = null) {
     }
   }
 
-  for (const r of sales.data ?? [])
+  for (const r of sales ?? [])
     m.push({ date: r.date, item_id: r.item_id, item: r.items?.name ?? '—', batch: r.batch_number ?? '—', storage: r.storage, boxes: -num(r.boxes), kilos: -num(r.kilos), type: 'Sale' })
 
-  for (const r of adj.data ?? [])
+  for (const r of adj ?? [])
     m.push({ date: r.date, item_id: r.item_id, item: r.items?.name ?? '—', batch: r.batch_number ?? '—', storage: r.storage, boxes: num(r.boxes), kilos: num(r.kilos), type: 'Adjustment' })
 
   return m.filter((x) => x.date)
