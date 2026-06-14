@@ -245,10 +245,8 @@ function Recycle({ isAdmin, profileName }) {
                 <td className="px-4 py-2.5 text-right whitespace-nowrap">
                   <button onClick={() => restore(r.id)} disabled={busy === r.id}
                     className="text-xs bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium px-3 py-1 rounded-lg">Restore</button>
-                  {isAdmin && (
-                    <button onClick={() => hardDelete(r.id)} disabled={busy === r.id}
-                      className="ml-2 text-xs border border-red-300 dark:border-red-500/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 px-3 py-1 rounded-lg">Delete forever</button>
-                  )}
+                  <button onClick={() => hardDelete(r.id)} disabled={busy === r.id}
+                    className="ml-2 text-xs border border-red-300 dark:border-red-500/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 px-3 py-1 rounded-lg">Delete forever</button>
                 </td>
               </tr>
             ))}

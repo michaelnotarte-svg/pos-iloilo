@@ -220,11 +220,11 @@ begin
   execute format('update public.%I set deleted_at = null, deleted_by = null where id = $1', p_table) using p_id;
 end $$;
 
--- Permanently delete a soft-deleted row (admin only).
+-- Permanently delete a soft-deleted row (admin or 'Audit' tag).
 create or replace function public.hard_delete_row(p_table text, p_id uuid)
 returns void language plpgsql security definer set search_path = public as $$
 begin
-  if not public.is_admin() then raise exception 'admin only'; end if;
+  if not (public.is_admin() or public.has_tag('Audit')) then raise exception 'not allowed'; end if;
   if not public._audit_table_ok(p_table) then raise exception 'unknown table %', p_table; end if;
   perform set_config('app.hard_delete', 'on', true);  -- local to this transaction
   execute format('delete from public.%I where id = $1', p_table) using p_id;
