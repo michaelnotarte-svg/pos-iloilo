@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from './supabase'
+import { loadSharedSettings } from './settings'
 
 const AuthContext = createContext(null)
 
@@ -8,6 +9,7 @@ export function AuthProvider({ children }) {
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [locations, setLocations] = useState([])
+  const [names, setNames] = useState({}) // user id -> display name
   const [activeLocation, setActiveLocationState] = useState(localStorage.getItem('pos.activeLocation') || 'Iloilo')
 
   useEffect(() => {
@@ -31,10 +33,13 @@ export function AuthProvider({ children }) {
     Promise.all([
       supabase.from('profiles').select('*').eq('id', session.user.id).single(),
       supabase.from('locations').select('name').order('name'),
-    ]).then(([{ data: prof }, { data: locs }]) => {
+      supabase.rpc('profile_names'),
+      loadSharedSettings(), // hydrate shared settings into the localStorage cache
+    ]).then(([{ data: prof }, { data: locs }, { data: nm }]) => {
       if (!active) return
       setProfile(prof ?? null)
       setLocations((locs ?? []).map((l) => l.name))
+      setNames(Object.fromEntries((nm ?? []).map((u) => [u.id, u.name])))
       // Staff are locked to their assigned branch; admin keeps last choice
       if (prof && !prof.is_admin && prof.location) setActiveLocationState(prof.location)
       setLoading(false)
@@ -56,6 +61,10 @@ export function AuthProvider({ children }) {
     isAdmin: !!profile?.is_admin,
     location: profile?.location ?? null,
     tags: profile?.tags ?? [],
+    // Audit/recycle-bin access: admin, or holds the 'Audit' tag
+    canAudit: !!profile?.is_admin || (profile?.tags ?? []).includes('Audit'),
+    // Resolve a user id → display name (loaded once via profile_names RPC)
+    profileName: (id) => (id ? (names[id] ?? '—') : '—'),
     // Can the current user write to a module? Admin always; else must hold the tag.
     // Pass one tag or an array (any-match).
     canWrite: (mods) => {

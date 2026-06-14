@@ -72,16 +72,16 @@ export default function Settings() {
   }
 
   return (
-    <div className="p-6 max-w-3xl mx-auto">
+    <div className="p-4 sm:p-6 max-w-3xl mx-auto">
       <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-100 mb-6">Settings</h1>
 
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700 mb-6">
+      {/* Tabs — scroll horizontally on small screens */}
+      <div className="flex gap-1 border-b border-gray-200 dark:border-gray-700 mb-6 overflow-x-auto">
         {tabs.map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 ${
+            className={`shrink-0 whitespace-nowrap px-4 py-2 text-sm font-medium -mb-px border-b-2 ${
               tab === t
                 ? 'border-blue-600 text-blue-700'
                 : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700'
@@ -129,12 +129,12 @@ export default function Settings() {
               <div>
                 <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">🔴 Critical at/below (boxes)</label>
                 <input type="number" step="any" value={thresh.critical} onChange={(e) => changeThresh('critical', e.target.value)}
-                  className="w-40 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-36 sm:w-40 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">🟠 Low at/below (boxes)</label>
                 <input type="number" step="any" value={thresh.low} onChange={(e) => changeThresh('low', e.target.value)}
-                  className="w-40 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  className="w-36 sm:w-40 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <p className="text-xs text-gray-400 dark:text-gray-500 pb-2">🟢 Sufficient &gt; {thresh.low} boxes</p>
             </div>

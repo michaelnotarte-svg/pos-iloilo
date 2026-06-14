@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
+import { supabase, selectAll } from '../lib/supabase'
 import { money } from '../lib/settings'
 import { fetchListNames, PAYMENT_FALLBACK, STORAGE_FALLBACK } from '../lib/lists'
 import ManageListModal from '../components/ManageListModal'
@@ -37,6 +37,11 @@ export default function Invoices() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [viewMode, setViewMode] = useState('summary') // 'summary' | 'items'
+  const [loadAll, setLoadAll] = useState(false) // false = last 30 days, true = full history
+  const [page, setPage] = useState(1)
+  const [unpaidKpi, setUnpaidKpi] = useState(null) // server-side total AR (all-time, this branch)
+  const PAGE_SIZE = 50
+  const recentCutoff = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
   const [custType, setCustType] = useState('Customer') // new-invoice filter
   const [typeView, setTypeView] = useState('Both') // list filter
   const anyFilter = !!search || statusFilter !== 'All' || !!dateFrom || !!dateTo || typeView !== 'Both'
@@ -51,7 +56,13 @@ export default function Invoices() {
   const [manageStorage, setManageStorage] = useState(false)
   const [manageCustomers, setManageCustomers] = useState(false)
 
-  useEffect(() => { fetchAll(); loadPayments() }, [activeLocation])
+  useEffect(() => { fetchAll(); loadPayments() }, [activeLocation, loadAll])
+  // Always-accurate AR for the branch (independent of the load window)
+  useEffect(() => {
+    supabase.rpc('unpaid_summary', { p_location: activeLocation }).then(({ data }) => setUnpaidKpi(data || null))
+  }, [activeLocation])
+  // Reset to the first page whenever the view or filters change
+  useEffect(() => { setPage(1) }, [search, statusFilter, typeView, dateFrom, dateTo, viewMode, loadAll])
 
   async function loadPayments() {
     setPaymentOptions(await fetchListNames('payment_method', PAYMENT_FALLBACK))
@@ -65,12 +76,13 @@ export default function Invoices() {
 
   async function fetchAll() {
     setLoading(true)
-    const [{ data: invData }, { data: custData }] = await Promise.all([
-      supabase
-        .from('invoices')
-        .select('*, customers(business_name, display_name, type), invoice_lines(amount, boxes, kilos, batch_number, items(name)), partial_payments(amount_paid)')
-        .eq('location', activeLocation)
-        .order('date', { ascending: false }),
+    const sel = '*, customers(business_name, display_name, type), invoice_lines(amount, boxes, kilos, batch_number, items(name)), partial_payments(amount_paid)'
+    const base = () => supabase.from('invoices').select(sel).eq('location', activeLocation).order('date', { ascending: false })
+    const invP = loadAll
+      ? selectAll(base) // full history, paginated past the 1000-row cap
+      : base().gte('date', recentCutoff).then((r) => r.data ?? []) // last 30 days only
+    const [invData, { data: custData }] = await Promise.all([
+      invP,
       supabase.from('customers').select('id, business_name, display_name, type').eq('location', activeLocation).order('business_name'),
     ])
     setInvoices(invData ?? [])
@@ -105,6 +117,15 @@ export default function Invoices() {
   const outstanding = filtered.filter((inv) => balanceOf(inv) > 1e-9)
   const kpiUnpaidCount = outstanding.length
   const kpiUnpaidAmount = outstanding.reduce((s, inv) => s + balanceOf(inv), 0)
+
+  // Prefer the server-side AR total; fall back to the windowed calc if the RPC isn't available yet
+  const uCount = unpaidKpi ? Number(unpaidKpi.count) : kpiUnpaidCount
+  const uAmount = unpaidKpi ? Number(unpaidKpi.amount) : kpiUnpaidAmount
+
+  // Client-side pagination of the rendered list
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const pageSafe = Math.min(page, totalPages)
+  const pageRows = filtered.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE)
 
   function set(field, value) { setForm((f) => ({ ...f, [field]: value })) }
 
@@ -150,13 +171,13 @@ export default function Invoices() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
         <div className="rounded-xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-4 py-3">
           <p className="text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500">Unpaid Invoices</p>
-          <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{kpiUnpaidCount}</p>
-          <p className="text-[11px] text-gray-400 dark:text-gray-500">Unpaid + Partial</p>
+          <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{uCount}</p>
+          <p className="text-[11px] text-gray-400 dark:text-gray-500">Unpaid + Partial · all-time</p>
         </div>
         <div className="rounded-xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-4 py-3">
           <p className="text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500">Unpaid Amount</p>
-          <p className="text-2xl font-bold text-red-600 dark:text-red-400">{money(kpiUnpaidAmount)}</p>
-          <p className="text-[11px] text-gray-400 dark:text-gray-500">Outstanding balance</p>
+          <p className="text-2xl font-bold text-red-600 dark:text-red-400">{money(uAmount)}</p>
+          <p className="text-[11px] text-gray-400 dark:text-gray-500">Outstanding balance · all-time</p>
         </div>
       </div>
 
@@ -197,6 +218,10 @@ export default function Invoices() {
           ))}
         </div>
         {anyFilter && <button onClick={resetFilters} className="text-xs text-blue-600 hover:underline self-center">Reset filters</button>}
+        <div className="flex items-center gap-2 text-xs self-center ml-auto">
+          <span className="text-gray-400 dark:text-gray-500">{loadAll ? 'All history' : 'Last 30 days'}{!loading && ` · ${filtered.length}`}</span>
+          <button onClick={() => setLoadAll((v) => !v)} className="text-blue-600 hover:underline">{loadAll ? 'Show recent' : 'Show all'}</button>
+        </div>
       </div>
 
       {loading ? (
@@ -219,7 +244,7 @@ export default function Invoices() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-800">
-              {filtered.flatMap((inv) => {
+              {pageRows.flatMap((inv) => {
                 const cust = inv.customers ? (inv.customers.display_name || inv.customers.business_name) : 'Walk-in'
                 const lines = inv.invoice_lines ?? []
                 if (lines.length === 0) return [(
@@ -262,7 +287,7 @@ export default function Invoices() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-800">
-              {filtered.map((inv) => {
+              {pageRows.map((inv) => {
                 const total = grandTotal(inv), paid = paidOf(inv), bal = total - paid
                 const st = derivedStatus(inv)
                 return (
@@ -287,6 +312,19 @@ export default function Invoices() {
               )})}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {!loading && filtered.length > PAGE_SIZE && (
+        <div className="flex items-center justify-between mt-3 text-sm">
+          <span className="text-gray-400 dark:text-gray-500 text-xs">
+            {(pageSafe - 1) * PAGE_SIZE + 1}–{Math.min(pageSafe * PAGE_SIZE, filtered.length)} of {filtered.length}
+          </span>
+          <div className="flex items-center gap-1">
+            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={pageSafe <= 1} className="px-3 py-1 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700/40">←</button>
+            <span className="px-2 text-gray-500 dark:text-gray-400 text-xs">Page {pageSafe} / {totalPages}</span>
+            <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={pageSafe >= totalPages} className="px-3 py-1 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 disabled:opacity-40 hover:bg-gray-50 dark:hover:bg-gray-700/40">→</button>
+          </div>
         </div>
       )}
 

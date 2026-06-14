@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
+import AttributionNote from '../components/AttributionNote'
 import { money } from '../lib/settings'
 
 const EMPTY_FORM = {
@@ -49,6 +50,7 @@ export default function Expenses() {
   const [loading, setLoading] = useState(true)
 
   const [modalOpen, setModalOpen] = useState(false)
+  const [editRec, setEditRec] = useState(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [editId, setEditId] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -124,6 +126,7 @@ export default function Expenses() {
   function openAdd() {
     setForm({ ...EMPTY_FORM, date: new Date().toISOString().slice(0, 10) })
     setEditId(null)
+    setEditRec(null)
     setError('')
     setModalOpen(true)
   }
@@ -137,6 +140,7 @@ export default function Expenses() {
       is_recurring: e.is_recurring ?? false,
     })
     setEditId(e.id)
+    setEditRec(e)
     setError('')
     setModalOpen(true)
   }
@@ -403,6 +407,7 @@ export default function Expenses() {
                   {saving ? 'Saving…' : 'Save'}
                 </button>
               </div>
+              {editRec && <AttributionNote record={editRec} className="pt-1" />}
             </form>
           </div>
         </div>

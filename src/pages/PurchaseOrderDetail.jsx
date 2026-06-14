@@ -5,6 +5,7 @@ import { fetchListNames, STORAGE_FALLBACK } from '../lib/lists'
 import ManageListModal from '../components/ManageListModal'
 import { fetchMovements, onHandMap, lookup, inStockItemIds, avgKgBox } from '../lib/inventory'
 import { useAuth } from '../lib/auth'
+import AttributionNote from '../components/AttributionNote'
 
 const EMPTY_LINE = {
   item_id: '',
@@ -349,6 +350,7 @@ export default function PurchaseOrderDetail() {
                 <p className="text-gray-700 dark:text-gray-200 mt-0.5">{po.notes}</p>
               </div>
             )}
+            <div className="col-span-2 sm:col-span-3"><AttributionNote record={po} /></div>
           </div>
         )}
       </div>

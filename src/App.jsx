@@ -13,6 +13,7 @@ import Inventory from './pages/Inventory'
 import Settings from './pages/Settings'
 import Snapshot from './pages/Snapshot'
 import Executive from './pages/Executive'
+import Audit from './pages/Audit'
 
 function Gate() {
   const { session, loading } = useAuth()
@@ -42,6 +43,7 @@ function Gate() {
           <Route path="/items" element={<Items />} />
           <Route path="/expenses" element={<Expenses />} />
           <Route path="/inventory" element={<Inventory />} />
+          <Route path="/audit" element={<Audit />} />
           <Route path="/settings" element={<Settings />} />
         </Route>
       </Routes>

@@ -6,6 +6,7 @@ import { fetchListNames, STORAGE_FALLBACK, PAYMENT_FALLBACK } from '../lib/lists
 import ManageListModal from '../components/ManageListModal'
 import { fetchMovements, onHandMap, lookup, inStockItemIds, avgKgBox, itemAvgMap, allocateFIFO } from '../lib/inventory'
 import { useAuth } from '../lib/auth'
+import AttributionNote from '../components/AttributionNote'
 
 const SALE_TYPES = ['Walk-in', 'Delivery', 'Out-of-Town']
 const STATUSES = ['Unpaid', 'Partial', 'Paid']
@@ -101,11 +102,15 @@ export default function InvoiceDetail() {
     (i) => showAllItems || inStock.has(i.id) || i.id === lineForm.item_id
   )
 
-  // Health check: this line's kg/box vs the item's normal kg/box
+  // Health check: this line's kg/box vs the "normal" kg/box. Prefer the actual
+  // on-hand ratio for this item+warehouse (what the helper above shows) so that
+  // depleting exactly to the on-hand reads as normal; fall back to the item's
+  // global inflow average when there's no stock on hand (e.g. oversell).
   const entryBoxes = Number(lineForm.boxes) || 0
   const entryKilos = Number(lineForm.kilos) || 0
   const entryAvg = entryBoxes > 0 ? entryKilos / entryBoxes : 0
-  const normalAvg = avgMap[lineForm.item_id] || 0
+  const onHandAvg = lineAvail.boxes > 0 ? avgKgBox(lineAvail) : 0
+  const normalAvg = onHandAvg || avgMap[lineForm.item_id] || 0
   const deviation = normalAvg > 0 && entryAvg > 0 ? Math.abs(entryAvg - normalAvg) / normalAvg : null
   const health = deviation == null ? 'unknown' : deviation <= 0.1 ? 'ok' : deviation <= 0.25 ? 'warn' : 'bad'
 
@@ -429,6 +434,7 @@ export default function InvoiceDetail() {
                 <p className="text-gray-700 dark:text-gray-200 mt-0.5">{inv.notes}</p>
               </div>
             )}
+            <div className="col-span-2 sm:col-span-5"><AttributionNote record={inv} /></div>
           </div>
         )}
       </div>

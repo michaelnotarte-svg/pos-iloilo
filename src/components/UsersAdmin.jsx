@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 
-const ALL_TAGS = ['Stocks', 'Sales', 'Expense', 'Inventory']
+const ALL_TAGS = ['Stocks', 'Sales', 'Expense', 'Inventory', 'Audit']
 
 export default function UsersAdmin() {
   const { profile: me } = useAuth()

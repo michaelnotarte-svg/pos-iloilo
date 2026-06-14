@@ -1,5 +1,8 @@
-// Browser-persisted app settings (theme, currency, business info).
-// Per-device for now; can move to a Supabase table later if shared settings are needed.
+// App settings. Theme is per-device; currency, business info and stock
+// thresholds are SHARED via the app_settings table (migration 0020) and
+// mirrored into localStorage so the getters below stay synchronous.
+
+import { supabase } from './supabase'
 
 const THEME_KEY = 'pos.theme'
 const CURRENCY_KEY = 'pos.currency'
@@ -32,6 +35,27 @@ export function setTheme(theme) {
   applyTheme(theme)
 }
 
+// ── Shared settings (Supabase app_settings) ──────────────
+// Fire-and-forget upsert; non-admins fail RLS silently and keep a local copy.
+function pushSetting(scope, key, value) {
+  supabase.from('app_settings')
+    .upsert({ scope: scope || 'global', key, value }, { onConflict: 'scope,key' })
+    .then(() => {}, () => {})
+}
+
+// Hydrate the localStorage cache from the shared table (called once at login).
+export async function loadSharedSettings() {
+  try {
+    const { data, error } = await supabase.from('app_settings').select('scope, key, value')
+    if (error || !data) return
+    for (const r of data) {
+      if (r.key === 'currency') localStorage.setItem(CURRENCY_KEY, r.value)
+      else if (r.key === 'thresholds') localStorage.setItem(`${THRESH_KEY}.${r.scope}`, JSON.stringify(r.value))
+      else if (r.key === 'business') localStorage.setItem(`${BUSINESS_KEY}.${r.scope}`, JSON.stringify(r.value))
+    }
+  } catch { /* offline / table missing → fall back to local cache */ }
+}
+
 // ── Currency ─────────────────────────────────────────────
 export function getCurrency() {
   return localStorage.getItem(CURRENCY_KEY) || '₱'
@@ -39,6 +63,7 @@ export function getCurrency() {
 
 export function setCurrency(symbol) {
   localStorage.setItem(CURRENCY_KEY, symbol)
+  pushSetting('global', 'currency', symbol)
 }
 
 // Formats a number as currency using the active symbol (2 decimals).
@@ -68,6 +93,7 @@ export function getBusiness(location) {
 
 export function setBusiness(obj, location) {
   localStorage.setItem(bizKey(location), JSON.stringify(obj))
+  pushSetting(location, 'business', obj)
 }
 
 // ── Admin mode (placeholder for real role-based auth) ────
@@ -97,6 +123,7 @@ export function getThresholds(location) {
 
 export function setThresholds(obj, location) {
   localStorage.setItem(threshKey(location), JSON.stringify(obj))
+  pushSetting(location, 'thresholds', obj)
 }
 
 // Returns 'Critical' | 'Low' | 'Sufficient' for a given #boxes value.
