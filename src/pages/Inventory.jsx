@@ -55,6 +55,7 @@ export default function Inventory() {
   const [view, setView] = useState('warehouse') // 'landing' | 'warehouse'
   const [asOf, setAsOf] = useState('')
   const [expandBatch, setExpandBatch] = useState(false)
+  const [sortBy, setSortBy] = useState('boxes') // 'item' | 'kilos' | 'boxes'
 
   // Ledger filters
   const [fStorage, setFStorage] = useState('All')
@@ -149,9 +150,13 @@ export default function Inventory() {
   // Negatives (oversold) stay visible as an error state.
   const EPS = 0.005
   const hasStock = (o) => Math.abs(o.kilos) >= EPS
-  const byBoxesDesc = (a, b) => b.boxes - a.boxes || a.item.localeCompare(b.item)
-  const landing = landingAll.filter(hasStock).sort(byBoxesDesc)
-  const warehouse = warehouseAll.filter(hasStock).sort(byBoxesDesc)
+  const sorter = sortBy === 'item'
+    ? (a, b) => a.item.localeCompare(b.item)
+    : sortBy === 'kilos'
+      ? (a, b) => b.kilos - a.kilos || a.item.localeCompare(b.item)
+      : (a, b) => b.boxes - a.boxes || a.item.localeCompare(b.item)
+  const landing = landingAll.filter(hasStock).sort(sorter)
+  const warehouse = warehouseAll.filter(hasStock).sort(sorter)
 
   // Item-level on-hand totals + status (across batches/warehouses, as of date).
   // Status is driven by #boxes; depleted-detection (below) stays on kilos.
@@ -367,6 +372,15 @@ export default function Inventory() {
         >
           <option value="All">All Warehouses</option>
           {storages.map((s) => <option key={s}>{s}</option>)}
+        </select>
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+          className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="item">Sort: Item name</option>
+          <option value="kilos">Sort: Kilos</option>
+          <option value="boxes">Sort: Boxes</option>
         </select>
         {(fItem || fStorage !== 'All' || lFrom || lTo) && (
           <button onClick={() => { setFItem(''); setFStorage('All'); setLFrom(''); setLTo(''); setLPage(1) }} className="text-xs text-blue-600 hover:underline self-center">Reset filters</button>
