@@ -131,11 +131,12 @@ export default function Inventory() {
     for (const m of rows) {
       const k = keyFn(m)
       if (!map.has(k))
-        map.set(k, { item: m.item, item_id: m.item_id, batch: m.batch, boxes: 0, kilos: 0, per: {}, batches: new Set() })
+        map.set(k, { item: m.item, item_id: m.item_id, batch: m.batch, boxes: 0, kilos: 0, per: {}, batches: new Set(), batchKilos: {} })
       const o = map.get(k)
       o.boxes += m.boxes
       o.kilos += m.kilos
       o.batches.add(m.batch)
+      o.batchKilos[m.batch] = (o.batchKilos[m.batch] ?? 0) + m.kilos
       if (!o.per[m.storage]) o.per[m.storage] = { boxes: 0, kilos: 0 }
       o.per[m.storage].boxes += m.boxes
       o.per[m.storage].kilos += m.kilos
@@ -422,7 +423,7 @@ export default function Inventory() {
                   <td className={`px-4 py-3 text-right ${neg(o.kilos) ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-gray-700 dark:text-gray-200'}`}>{kg(o.kilos)}</td>
                   <td className="px-4 py-3"><span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLE[statusOf(o.item_id)]}`}>{statusOf(o.item_id)}</span></td>
                   <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs">{Object.keys(o.per).join(', ')}</td>
-                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs font-mono">{[...o.batches].sort().join(', ')}</td>
+                  <td className="px-4 py-3 text-gray-500 dark:text-gray-400 text-xs font-mono">{Object.keys(o.batchKilos).filter((b) => Math.abs(o.batchKilos[b]) >= 0.005).sort().join(', ')}</td>
                 </tr>
               ))}
             </tbody>
