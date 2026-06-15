@@ -22,6 +22,7 @@ const EMPTY_LINE = {
   unit_price: '',
   boxes: '',
   kilos: '',
+  storage: '', // per-line warehouse override; defaults to the invoice's warehouse
 }
 
 const EMPTY_PAYMENT = {
@@ -95,9 +96,10 @@ export default function InvoiceDetail() {
   }
 
   const invStorage = inv?.storage || ''
+  const lineStorage = lineForm.storage || invStorage // per-line override, defaults to the invoice's warehouse
   const isBN = inv?.customers?.type === 'BN'
-  const lineAvail = lookup(invMap, lineForm.item_id, invStorage)
-  const inStock = inStockItemIds(invMap, invStorage)
+  const lineAvail = lookup(invMap, lineForm.item_id, lineStorage)
+  const inStock = inStockItemIds(invMap, lineStorage)
   const itemsForDropdown = items.filter(
     (i) => showAllItems || inStock.has(i.id) || i.id === lineForm.item_id
   )
@@ -160,7 +162,7 @@ export default function InvoiceDetail() {
 
   // ── Lines ─────────────────────────────────────────────────
   function openAddLine() {
-    setLineForm(EMPTY_LINE)
+    setLineForm({ ...EMPTY_LINE, storage: inv?.storage || '' })
     setEditLineId(null)
     setLineError('')
     setLineModal(true)
@@ -172,6 +174,7 @@ export default function InvoiceDetail() {
       unit_price: l.unit_price,
       boxes: l.boxes ?? '',
       kilos: l.kilos,
+      storage: l.storage ?? '',
     })
     setEditLineId(l.id)
     setLineError('')
@@ -187,10 +190,10 @@ export default function InvoiceDetail() {
     } else if (!lineForm.unit_price) {
       setLineError('Unit price is required.'); return
     }
-    if (!inv?.storage) { setLineError('Set the invoice warehouse first (Edit the header).'); return }
+    if (!lineStorage) { setLineError('Set the invoice warehouse first (Edit the header), or pick one for this line.'); return }
 
-    // Over-sell guard (against on-hand at the invoice warehouse)
-    const avail = lookup(invMap, lineForm.item_id, inv.storage)
+    // Over-sell guard (against on-hand at the line's warehouse)
+    const avail = lookup(invMap, lineForm.item_id, lineStorage)
     const reqKilos = Number(lineForm.kilos)
     const reqBoxes = lineForm.boxes ? Number(lineForm.boxes) : 0
     if (reqKilos > avail.kilos + 1e-9 || reqBoxes > avail.boxes + 1e-9) {
@@ -203,7 +206,7 @@ export default function InvoiceDetail() {
   async function doSaveLine(isOverride) {
     setSavingLine(true)
     setLineError('')
-    const storage = inv.storage
+    const storage = lineForm.storage || inv.storage
     const item_id = lineForm.item_id
     const kilos = Number(lineForm.kilos)
     const boxes = lineForm.boxes ? Number(lineForm.boxes) : null
@@ -569,10 +572,18 @@ export default function InvoiceDetail() {
               </select>
               {lineForm.item_id && (
                 <p className={`text-[11px] mt-1 ${lineAvail.kilos <= 0 ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
-                  On hand @ {invStorage || '—'}: <span className="font-semibold">{lineAvail.boxes.toLocaleString(undefined, { maximumFractionDigits: 2 })} box</span> · <span className="font-semibold">{lineAvail.kilos.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg</span>
+                  On hand @ {lineStorage || '—'}: <span className="font-semibold">{lineAvail.boxes.toLocaleString(undefined, { maximumFractionDigits: 2 })} box</span> · <span className="font-semibold">{lineAvail.kilos.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg</span>
                   {lineAvail.boxes > 0 && <> · avg {avgKgBox(lineAvail).toLocaleString(undefined, { maximumFractionDigits: 2 })} kg/box</>}
                 </p>
               )}
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Warehouse</label>
+              <select value={lineForm.storage} onChange={(e) => setLineForm({ ...lineForm, storage: e.target.value })}
+                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                {storageOptions.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+              <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Defaults to the invoice's warehouse ({invStorage || '—'}); override to draw this item from a different one.</p>
             </div>
             <div className="grid grid-cols-3 gap-3">
               <F label="Boxes" value={lineForm.boxes} onChange={(v) => setLineForm({ ...lineForm, boxes: v })} type="number" />
@@ -614,7 +625,7 @@ export default function InvoiceDetail() {
               Selling <span className="font-medium text-gray-700 dark:text-gray-200">{oversell.requested.kilos.toLocaleString(undefined, { maximumFractionDigits: 2 })} kg</span>
               {oversell.requested.boxes ? <> / {oversell.requested.boxes} box</> : null} but only{' '}
               <span className="font-medium text-gray-700 dark:text-gray-200">{oversell.available.kilos.toLocaleString(undefined, { maximumFractionDigits: 2 })} kg</span>
-              {' '}/ {oversell.available.boxes.toLocaleString(undefined, { maximumFractionDigits: 2 })} box on hand at {invStorage}.
+              {' '}/ {oversell.available.boxes.toLocaleString(undefined, { maximumFractionDigits: 2 })} box on hand at {lineStorage}.
             </p>
             <p className="text-xs text-amber-600 dark:text-amber-400 mb-4">This override will be logged for admin approval.</p>
             <div className="flex justify-end gap-2">
