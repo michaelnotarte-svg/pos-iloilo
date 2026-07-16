@@ -6,23 +6,32 @@ const num = (x) => Number(x) || 0
 // and the on-hand helpers in the entry forms.
 // Pass `location` to scope everything to one branch.
 // Returns an array of { date, item_id, item, batch, storage, boxes, kilos, type }.
-export async function fetchMovements(location = null) {
+// `opts.itemId` narrows every query to a single item — used by allocateFIFO so a
+// line save doesn't download the entire branch's movement history.
+export async function fetchMovements(location = null, opts = {}) {
+  const { itemId } = opts
+  const byItem = (q) => (itemId ? q.eq('item_id', itemId) : q)
+
   const archB = () => {
     let q = supabase.from('inventory_archive').select('snapshot_date, item_id, batch_number, storage, boxes, kilos, items(name)')
-    return location ? q.eq('location', location) : q
+    if (location) q = q.eq('location', location)
+    return byItem(q)
   }
   const stockB = () => {
     let q = supabase.from('stock_entries').select('date, item_id, batch_number, storage, boxes, kilos, items(name), purchase_orders!inner(from_storage, location)')
-    return location ? q.eq('purchase_orders.location', location) : q
+    if (location) q = q.eq('purchase_orders.location', location)
+    return byItem(q)
   }
   // Sales come from FIFO batch allocations (per batch), not the raw line
   const salesB = () => {
     let q = supabase.from('invoice_line_allocations').select('date, item_id, batch_number, storage, boxes, kilos, items(name), invoices!inner(location)')
-    return location ? q.eq('invoices.location', location) : q
+    if (location) q = q.eq('invoices.location', location)
+    return byItem(q)
   }
   const adjB = () => {
     let q = supabase.from('inventory_adjustments').select('date, item_id, batch_number, storage, boxes, kilos, items(name)')
-    return location ? q.eq('location', location) : q
+    if (location) q = q.eq('location', location)
+    return byItem(q)
   }
 
   const [arch, stock, sales, adj] = await Promise.all([
@@ -105,8 +114,11 @@ export function itemAvgMap(moves) {
 // FIFO-allocate a sale of `kilos`/`boxes` for item+storage across available batches
 // (oldest first). Returns [{ batch_number, kilos, boxes }]. Excess (oversell) lands
 // on the newest batch. `excludeLineId` ignores an existing line's allocations (for edits).
-export async function allocateFIFO({ itemId, storage, kilos, boxes, excludeLineId }) {
-  const moves = await fetchMovements()
+export async function allocateFIFO({ itemId, storage, kilos, boxes, excludeLineId, location = null }) {
+  // Only this item's movements — not the whole branch. (Storage is NOT filtered in
+  // the query: a transfer OUT of this storage is recorded on the destination's row,
+  // so it must come back and be filtered in JS below.)
+  const moves = await fetchMovements(location, { itemId })
 
   // Available before sales, per batch (+ earliest date for FIFO ordering)
   const batchMap = {}

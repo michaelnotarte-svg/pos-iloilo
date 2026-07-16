@@ -12,7 +12,8 @@ import { useAuth } from '../lib/auth'
  */
 export default function ManageListModal({ listType, title, onClose, onChange }) {
   const { activeLocation } = useAuth()
-  const branchScoped = listType === 'storage'
+  // Lists that are specific to a branch (each branch keeps its own entries)
+  const branchScoped = listType === 'storage' || listType === 'sales_person'
   const [options, setOptions] = useState([])
   const [name, setName] = useState('')
   const [saving, setSaving] = useState(false)

@@ -2,13 +2,20 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase, selectAll } from '../lib/supabase'
 import { money } from '../lib/settings'
-import { fetchListNames, PAYMENT_FALLBACK, STORAGE_FALLBACK } from '../lib/lists'
+import { fetchListNames, PAYMENT_FALLBACK, STORAGE_FALLBACK, SALE_TYPE_FALLBACK } from '../lib/lists'
 import ManageListModal from '../components/ManageListModal'
 import ManageCustomersModal from '../components/ManageCustomersModal'
+import SearchSelect from '../components/SearchSelect'
 import { useAuth } from '../lib/auth'
 
-const SALE_TYPES = ['Walk-in', 'Delivery', 'Out-of-Town']
 const STATUSES = ['Unpaid', 'Partial', 'Paid']
+
+const LIST_TITLES = {
+  payment_method: 'Manage Payment Methods',
+  storage: 'Manage Storage Locations',
+  sale_type: 'Manage Sale Types',
+  sales_person: 'Manage Sales People',
+}
 
 const STATUS_STYLE = {
   Paid: 'bg-green-100 text-green-700',
@@ -22,6 +29,7 @@ const EMPTY_FORM = {
   date: new Date().toISOString().slice(0, 10),
   storage: 'Everest',
   sale_type: 'Walk-in',
+  sales_person: '',
   notes: '',
 }
 
@@ -44,29 +52,33 @@ export default function Invoices() {
   const recentCutoff = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
   const [custType, setCustType] = useState('Customer') // new-invoice filter
   const [typeView, setTypeView] = useState('Both') // list filter
-  const anyFilter = !!search || statusFilter !== 'All' || !!dateFrom || !!dateTo || typeView !== 'Both'
-  function resetFilters() { setSearch(''); setStatusFilter('All'); setDateFrom(''); setDateTo(''); setTypeView('Both') }
+  const [saleTypeFilter, setSaleTypeFilter] = useState('All')
+  const anyFilter = !!search || statusFilter !== 'All' || !!dateFrom || !!dateTo || typeView !== 'Both' || saleTypeFilter !== 'All'
+  function resetFilters() { setSearch(''); setStatusFilter('All'); setDateFrom(''); setDateTo(''); setTypeView('Both'); setSaleTypeFilter('All') }
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [paymentOptions, setPaymentOptions] = useState(PAYMENT_FALLBACK)
   const [storageOptions, setStorageOptions] = useState(STORAGE_FALLBACK)
-  const [managePayment, setManagePayment] = useState(false)
-  const [manageStorage, setManageStorage] = useState(false)
+  const [saleTypeOptions, setSaleTypeOptions] = useState(SALE_TYPE_FALLBACK)
+  const [salesPersonOptions, setSalesPersonOptions] = useState([])
+  const [manageList, setManageList] = useState(null) // 'payment_method' | 'storage' | 'sale_type' | 'sales_person'
   const [manageCustomers, setManageCustomers] = useState(false)
 
-  useEffect(() => { fetchAll(); loadPayments() }, [activeLocation, loadAll, dateFrom, dateTo])
+  useEffect(() => { fetchAll(); loadLists() }, [activeLocation, loadAll, dateFrom, dateTo])
   // Always-accurate AR for the branch (independent of the load window)
   useEffect(() => {
     supabase.rpc('unpaid_summary', { p_location: activeLocation }).then(({ data }) => setUnpaidKpi(data || null))
   }, [activeLocation])
   // Reset to the first page whenever the view or filters change
-  useEffect(() => { setPage(1) }, [search, statusFilter, typeView, dateFrom, dateTo, viewMode, loadAll])
+  useEffect(() => { setPage(1) }, [search, statusFilter, typeView, saleTypeFilter, dateFrom, dateTo, viewMode, loadAll])
 
-  async function loadPayments() {
+  async function loadLists() {
     setPaymentOptions(await fetchListNames('payment_method', PAYMENT_FALLBACK))
     setStorageOptions(await fetchListNames('storage', STORAGE_FALLBACK, activeLocation))
+    setSaleTypeOptions(await fetchListNames('sale_type', SALE_TYPE_FALLBACK))
+    setSalesPersonOptions(await fetchListNames('sales_person', [], activeLocation))
   }
 
   async function loadCustomers() {
@@ -116,7 +128,8 @@ export default function Invoices() {
     const matchStatus = statusFilter === 'All' || derivedStatus(inv) === statusFilter
     const matchDate = (!dateFrom || inv.date >= dateFrom) && (!dateTo || inv.date <= dateTo)
     const matchType = typeView === 'Both' || (inv.customers?.type ?? 'Customer') === typeView
-    return matchSearch && matchStatus && matchDate && matchType
+    const matchSaleType = saleTypeFilter === 'All' || inv.sale_type === saleTypeFilter
+    return matchSearch && matchStatus && matchDate && matchType && matchSaleType
   })
 
   // KPIs over the filtered set — outstanding = Unpaid + Partial balances
@@ -127,6 +140,33 @@ export default function Invoices() {
   // Prefer the server-side AR total; fall back to the windowed calc if the RPC isn't available yet
   const uCount = unpaidKpi ? Number(unpaidKpi.count) : kpiUnpaidCount
   const uAmount = unpaidKpi ? Number(unpaidKpi.amount) : kpiUnpaidAmount
+
+  // ── Totals for the filtered set (shown above the list) ──
+  const kilosOf = (inv) => (inv.invoice_lines ?? []).reduce((s, l) => s + (Number(l.kilos) || 0), 0)
+  const boxesOf = (inv) => (inv.invoice_lines ?? []).reduce((s, l) => s + (Number(l.boxes) || 0), 0)
+  const totals = filtered.reduce(
+    (a, inv) => {
+      a.count++
+      a.kilos += kilosOf(inv)
+      a.boxes += boxesOf(inv)
+      a.amount += grandTotal(inv)
+      a.paid += paidOf(inv)
+      return a
+    },
+    { count: 0, kilos: 0, boxes: 0, amount: 0, paid: 0 }
+  )
+  // Breakout per sale type
+  const byType = {}
+  for (const inv of filtered) {
+    const t = inv.sale_type || '—'
+    const b = byType[t] || (byType[t] = { count: 0, kilos: 0, boxes: 0, amount: 0 })
+    b.count++
+    b.kilos += kilosOf(inv)
+    b.boxes += boxesOf(inv)
+    b.amount += grandTotal(inv)
+  }
+  const typeRows = Object.entries(byType).sort((a, b) => b[1].amount - a[1].amount)
+  const nfx = (n, d = 2) => Number(n).toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d })
 
   // Client-side pagination of the rendered list
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
@@ -149,6 +189,7 @@ export default function Invoices() {
       date: form.date,
       storage: form.storage,
       sale_type: form.sale_type,
+      sales_person: form.sales_person || null,
       status: 'Unpaid',
       notes: form.notes?.trim() || null,
     }
@@ -212,6 +253,14 @@ export default function Invoices() {
           <option value="Customer">Customer only</option>
           <option value="BN">BN only</option>
         </select>
+        <select
+          value={saleTypeFilter}
+          onChange={(e) => setSaleTypeFilter(e.target.value)}
+          className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="All">All Sale Types</option>
+          {saleTypeOptions.map((s) => <option key={s}>{s}</option>)}
+        </select>
         <div className="flex items-center gap-1">
           <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           <span className="text-gray-400 text-xs">→</span>
@@ -229,6 +278,49 @@ export default function Invoices() {
           <button onClick={() => setLoadAll((v) => !v)} className="text-blue-600 hover:underline">{loadAll ? 'Show recent' : 'Show all'}</button>
         </div>
       </div>
+
+      {/* Totals for the filtered set */}
+      {!loading && filtered.length > 0 && (
+        <div className="mb-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-x divide-y sm:divide-y-0 divide-gray-100 dark:divide-gray-700">
+            <Tot label="Invoices" value={totals.count.toLocaleString()} />
+            <Tot label="Total Kilos" value={nfx(totals.kilos)} />
+            <Tot label="Total Boxes" value={nfx(totals.boxes, 0)} />
+            <Tot label="Total Invoice" value={money(totals.amount)} />
+            <Tot label="Total Paid" value={money(totals.paid)} accent="text-green-600 dark:text-green-400" />
+            <Tot label="Balance" value={money(totals.amount - totals.paid)} accent="text-red-600 dark:text-red-400" />
+          </div>
+          {typeRows.length > 0 && (
+            <div className="border-t border-gray-100 dark:border-gray-700 px-4 py-3">
+              <p className="text-[11px] uppercase tracking-wide text-gray-400 dark:text-gray-500 mb-2">Breakout by sale type</p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead className="text-gray-400 dark:text-gray-500">
+                    <tr>
+                      <th className="text-left font-medium py-1">Type</th>
+                      <th className="text-right font-medium py-1">Invoices</th>
+                      <th className="text-right font-medium py-1">Kilos</th>
+                      <th className="text-right font-medium py-1">Boxes</th>
+                      <th className="text-right font-medium py-1">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 dark:divide-gray-700">
+                    {typeRows.map(([t, b]) => (
+                      <tr key={t}>
+                        <td className="py-1.5 text-gray-700 dark:text-gray-200">{t}</td>
+                        <td className="py-1.5 text-right text-gray-600 dark:text-gray-300">{b.count.toLocaleString()}</td>
+                        <td className="py-1.5 text-right text-gray-600 dark:text-gray-300">{nfx(b.kilos)}</td>
+                        <td className="py-1.5 text-right text-gray-600 dark:text-gray-300">{nfx(b.boxes, 0)}</td>
+                        <td className="py-1.5 text-right font-medium text-gray-700 dark:text-gray-200">{money(b.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {loading ? (
         <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-12">Loading…</p>
@@ -385,22 +477,20 @@ export default function Invoices() {
                   <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">Customer *</label>
                   <button type="button" onClick={() => setManageCustomers(true)} className="text-[11px] text-blue-600 hover:underline">Manage</button>
                 </div>
-                <select
+                <SearchSelect
                   value={form.customer_id}
-                  onChange={(e) => set('customer_id', e.target.value)}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">— Select a {custType === 'BN' ? 'BN' : 'customer'} —</option>
-                  {customers.filter((c) => (c.type ?? 'Customer') === custType).map((c) => (
-                    <option key={c.id} value={c.id}>{c.display_name || c.business_name}</option>
-                  ))}
-                </select>
+                  onChange={(id) => set('customer_id', id)}
+                  options={customers
+                    .filter((c) => (c.type ?? 'Customer') === custType)
+                    .map((c) => ({ id: c.id, label: c.display_name || c.business_name }))}
+                  placeholder={`Type to search ${custType === 'BN' ? 'BN' : 'customers'}…`}
+                />
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">Warehouse *</label>
-                  <button type="button" onClick={() => setManageStorage(true)} className="text-[11px] text-blue-600 hover:underline">Manage</button>
+                  <button type="button" onClick={() => setManageList('storage')} className="text-[11px] text-blue-600 hover:underline">Manage</button>
                 </div>
                 <select
                   value={form.storage}
@@ -412,15 +502,35 @@ export default function Invoices() {
                 <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">All line items will draw stock from this warehouse (FIFO by batch).</p>
               </div>
 
-              <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Sale Type</label>
-                <select
-                  value={form.sale_type}
-                  onChange={(e) => set('sale_type', e.target.value)}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {SALE_TYPES.map((s) => <option key={s}>{s}</option>)}
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">Sale Type</label>
+                    <button type="button" onClick={() => setManageList('sale_type')} className="text-[11px] text-blue-600 hover:underline">Manage</button>
+                  </div>
+                  <select
+                    value={form.sale_type}
+                    onChange={(e) => set('sale_type', e.target.value)}
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {saleTypeOptions.map((s) => <option key={s}>{s}</option>)}
+                    {form.sale_type && !saleTypeOptions.includes(form.sale_type) && <option>{form.sale_type}</option>}
+                  </select>
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">Sales Person</label>
+                    <button type="button" onClick={() => setManageList('sales_person')} className="text-[11px] text-blue-600 hover:underline">Manage</button>
+                  </div>
+                  <select
+                    value={form.sales_person}
+                    onChange={(e) => set('sales_person', e.target.value)}
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">— None —</option>
+                    {salesPersonOptions.map((s) => <option key={s}>{s}</option>)}
+                  </select>
+                </div>
               </div>
 
               <div>
@@ -446,30 +556,35 @@ export default function Invoices() {
         </div>
       )}
 
-      {managePayment && (
+      {manageList && (
         <ManageListModal
-          listType="payment_method"
-          title="Manage Payment Methods"
-          onClose={() => setManagePayment(false)}
-          onChange={loadPayments}
-        />
-      )}
-
-      {manageStorage && (
-        <ManageListModal
-          listType="storage"
-          title="Manage Storage Locations"
-          onClose={() => setManageStorage(false)}
-          onChange={loadPayments}
+          listType={manageList}
+          title={LIST_TITLES[manageList] ?? 'Manage List'}
+          onClose={() => setManageList(null)}
+          onChange={loadLists}
         />
       )}
 
       {manageCustomers && (
         <ManageCustomersModal
+          defaultType={custType}
           onClose={() => setManageCustomers(false)}
-          onChange={loadCustomers}
+          onChange={async (newId) => {
+            await loadCustomers()
+            if (newId) set('customer_id', newId) // auto-select the one just added
+          }}
         />
       )}
+    </div>
+  )
+}
+
+// One tile in the totals strip above the invoice list
+function Tot({ label, value, accent }) {
+  return (
+    <div className="px-4 py-3">
+      <p className="text-[11px] uppercase tracking-wide text-gray-400 dark:text-gray-500">{label}</p>
+      <p className={`text-lg font-bold ${accent || 'text-gray-800 dark:text-gray-100'}`}>{value}</p>
     </div>
   )
 }

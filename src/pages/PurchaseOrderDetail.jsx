@@ -696,8 +696,13 @@ function ItemCombobox({ items, value, onSelect, onQuickAdd }) {
         value={query}
         placeholder="Type to search items…"
         onChange={(e) => { setQuery(e.target.value); setOpen(true) }}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        // Clear on focus so you can type straight away; restore the pick on blur
+        onFocus={() => { setOpen(true); setQuery('') }}
+        onBlur={() => setTimeout(() => {
+          setOpen(false)
+          const sel = items.find((i) => i.id === value)
+          setQuery(sel ? sel.name : '')
+        }, 150)}
         className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
       />
       {open && (

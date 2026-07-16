@@ -2,19 +2,26 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { money } from '../lib/settings'
-import { fetchListNames, STORAGE_FALLBACK, PAYMENT_FALLBACK } from '../lib/lists'
+import { fetchListNames, STORAGE_FALLBACK, PAYMENT_FALLBACK, SALE_TYPE_FALLBACK } from '../lib/lists'
 import ManageListModal from '../components/ManageListModal'
 import { fetchMovements, onHandMap, lookup, inStockItemIds, avgKgBox, itemAvgMap, allocateFIFO } from '../lib/inventory'
 import { useAuth } from '../lib/auth'
 import AttributionNote from '../components/AttributionNote'
+import SearchSelect from '../components/SearchSelect'
 
-const SALE_TYPES = ['Walk-in', 'Delivery', 'Out-of-Town']
 const STATUSES = ['Unpaid', 'Partial', 'Paid']
 
 const STATUS_STYLE = {
   Paid: 'bg-green-100 text-green-700',
   Unpaid: 'bg-red-100 text-red-700',
   Partial: 'bg-yellow-100 text-yellow-700',
+}
+
+const LIST_TITLES = {
+  storage: 'Manage Storage Locations',
+  payment_method: 'Manage Payment Methods',
+  sale_type: 'Manage Sale Types',
+  sales_person: 'Manage Sales People',
 }
 
 const EMPTY_LINE = {
@@ -75,7 +82,9 @@ export default function InvoiceDetail() {
 
   const [storageOptions, setStorageOptions] = useState(STORAGE_FALLBACK)
   const [paymentOptions, setPaymentOptions] = useState(PAYMENT_FALLBACK)
-  const [manageList, setManageList] = useState(null) // 'storage' | 'payment_method' | null
+  const [saleTypeOptions, setSaleTypeOptions] = useState(SALE_TYPE_FALLBACK)
+  const [salesPersonOptions, setSalesPersonOptions] = useState([])
+  const [manageList, setManageList] = useState(null) // 'storage' | 'payment_method' | 'sale_type' | 'sales_person' | null
 
   const [invMap, setInvMap] = useState(new Map())
   const [avgMap, setAvgMap] = useState({})
@@ -87,6 +96,8 @@ export default function InvoiceDetail() {
   async function loadLists() {
     setStorageOptions(await fetchListNames('storage', STORAGE_FALLBACK, activeLocation))
     setPaymentOptions(await fetchListNames('payment_method', PAYMENT_FALLBACK))
+    setSaleTypeOptions(await fetchListNames('sale_type', SALE_TYPE_FALLBACK))
+    setSalesPersonOptions(await fetchListNames('sales_person', [], activeLocation))
   }
 
   async function loadInventory() {
@@ -133,6 +144,7 @@ export default function InvoiceDetail() {
       date: invData?.date ?? '',
       storage: invData?.storage ?? 'Everest',
       sale_type: invData?.sale_type ?? 'Walk-in',
+      sales_person: invData?.sales_person ?? '',
       notes: invData?.notes ?? '',
     })
     setLines(linesData ?? [])
@@ -152,6 +164,7 @@ export default function InvoiceDetail() {
       date: headerForm.date,
       storage: headerForm.storage,
       sale_type: headerForm.sale_type,
+      sales_person: headerForm.sales_person || null,
       notes: headerForm.notes?.trim() || null,
     }).eq('id', id)
     setSavingHeader(false)
@@ -212,7 +225,7 @@ export default function InvoiceDetail() {
     const boxes = lineForm.boxes ? Number(lineForm.boxes) : null
 
     // FIFO-allocate across batches
-    const allocs = await allocateFIFO({ itemId: item_id, storage, kilos, boxes: boxes || 0, excludeLineId: editLineId })
+    const allocs = await allocateFIFO({ itemId: item_id, storage, kilos, boxes: boxes || 0, excludeLineId: editLineId, location: activeLocation })
     const batchList = [...new Set(allocs.map((a) => a.batch_number))].join(', ')
 
     const linePayload = {
@@ -390,11 +403,12 @@ export default function InvoiceDetail() {
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Customer *</label>
-              <select value={headerForm.customer_id} onChange={(e) => setHeaderForm({ ...headerForm, customer_id: e.target.value })}
-                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="">— Select a customer —</option>
-                {customers.map((c) => <option key={c.id} value={c.id}>{c.display_name || c.business_name}</option>)}
-              </select>
+              <SearchSelect
+                value={headerForm.customer_id}
+                onChange={(id) => setHeaderForm({ ...headerForm, customer_id: id })}
+                options={customers.map((c) => ({ id: c.id, label: c.display_name || c.business_name }))}
+                placeholder="Type to search customers…"
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
@@ -405,12 +419,28 @@ export default function InvoiceDetail() {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Sale Type</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">Sale Type</label>
+                  <button type="button" onClick={() => setManageList('sale_type')} className="text-[11px] text-blue-600 hover:underline">Manage</button>
+                </div>
                 <select value={headerForm.sale_type} onChange={(e) => setHeaderForm({ ...headerForm, sale_type: e.target.value })}
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                  {SALE_TYPES.map((s) => <option key={s}>{s}</option>)}
+                  {saleTypeOptions.map((s) => <option key={s}>{s}</option>)}
+                  {headerForm.sale_type && !saleTypeOptions.includes(headerForm.sale_type) && <option>{headerForm.sale_type}</option>}
                 </select>
               </div>
+            </div>
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">Sales Person</label>
+                <button type="button" onClick={() => setManageList('sales_person')} className="text-[11px] text-blue-600 hover:underline">Manage</button>
+              </div>
+              <select value={headerForm.sales_person} onChange={(e) => setHeaderForm({ ...headerForm, sales_person: e.target.value })}
+                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <option value="">— None —</option>
+                {salesPersonOptions.map((s) => <option key={s}>{s}</option>)}
+                {headerForm.sales_person && !salesPersonOptions.includes(headerForm.sales_person) && <option>{headerForm.sales_person}</option>}
+              </select>
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Notes</label>
@@ -425,19 +455,20 @@ export default function InvoiceDetail() {
             </div>
           </form>
         ) : (
-          <div className="px-6 py-4 grid grid-cols-2 sm:grid-cols-5 gap-x-8 gap-y-3 text-sm">
+          <div className="px-6 py-4 grid grid-cols-2 sm:grid-cols-6 gap-x-8 gap-y-3 text-sm">
             <InfoRow label="Date" value={inv.date} />
             <InfoRow label="Customer" value={inv.customers ? (inv.customers.display_name || inv.customers.business_name) : 'Walk-in'} />
             <InfoRow label="Warehouse" value={inv.storage ?? '—'} />
             <InfoRow label="Sale Type" value={inv.sale_type} />
+            <InfoRow label="Sales Person" value={inv.sales_person ?? '—'} />
             <InfoRow label="Status" value={inv.status} />
             {inv.notes && (
-              <div className="col-span-2 sm:col-span-5">
+              <div className="col-span-2 sm:col-span-6">
                 <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">Notes</span>
                 <p className="text-gray-700 dark:text-gray-200 mt-0.5">{inv.notes}</p>
               </div>
             )}
-            <div className="col-span-2 sm:col-span-5"><AttributionNote record={inv} /></div>
+            <div className="col-span-2 sm:col-span-6"><AttributionNote record={inv} /></div>
           </div>
         )}
       </div>
@@ -565,11 +596,12 @@ export default function InvoiceDetail() {
                   Show all items
                 </label>
               </div>
-              <select value={lineForm.item_id} onChange={(e) => setLineForm({ ...lineForm, item_id: e.target.value })}
-                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <option value="">Select item…</option>
-                {itemsForDropdown.map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
-              </select>
+              <SearchSelect
+                value={lineForm.item_id}
+                onChange={(id) => setLineForm({ ...lineForm, item_id: id })}
+                options={itemsForDropdown.map((i) => ({ id: i.id, label: i.name }))}
+                placeholder="Type to search items…"
+              />
               {lineForm.item_id && (
                 <p className={`text-[11px] mt-1 ${lineAvail.kilos <= 0 ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
                   On hand @ {lineStorage || '—'}: <span className="font-semibold">{lineAvail.boxes.toLocaleString(undefined, { maximumFractionDigits: 2 })} box</span> · <span className="font-semibold">{lineAvail.kilos.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg</span>
@@ -704,7 +736,7 @@ export default function InvoiceDetail() {
       {manageList && (
         <ManageListModal
           listType={manageList}
-          title={manageList === 'storage' ? 'Manage Storage Locations' : 'Manage Payment Methods'}
+          title={LIST_TITLES[manageList] ?? 'Manage List'}
           onClose={() => setManageList(null)}
           onChange={loadLists}
         />
