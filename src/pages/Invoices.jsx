@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase, selectAll } from '../lib/supabase'
 import { money } from '../lib/settings'
@@ -9,6 +9,13 @@ import SearchSelect from '../components/SearchSelect'
 import { useAuth } from '../lib/auth'
 
 const STATUSES = ['Unpaid', 'Partial', 'Paid']
+
+// Invoice filters persist for the browser session, so drilling into an invoice
+// and coming back doesn't wipe what you were validating.
+const FILTERS_KEY = 'pos.invoiceFilters'
+function loadSavedFilters() {
+  try { return JSON.parse(sessionStorage.getItem(FILTERS_KEY)) || {} } catch { return {} }
+}
 
 const LIST_TITLES = {
   payment_method: 'Manage Payment Methods',
@@ -37,22 +44,24 @@ export default function Invoices() {
   const navigate = useNavigate()
   const { activeLocation, canWrite } = useAuth()
   const canEdit = canWrite('Sales')
+  // Filters survive navigating into an invoice and back (kept for the browser session)
+  const [saved] = useState(loadSavedFilters)
   const [invoices, setInvoices] = useState([])
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
-  const [statusFilter, setStatusFilter] = useState('All')
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
-  const [viewMode, setViewMode] = useState('summary') // 'summary' | 'items'
-  const [loadAll, setLoadAll] = useState(false) // false = last 30 days, true = full history
-  const [page, setPage] = useState(1)
+  const [search, setSearch] = useState(saved.search ?? '')
+  const [statusFilter, setStatusFilter] = useState(saved.statusFilter ?? 'All')
+  const [dateFrom, setDateFrom] = useState(saved.dateFrom ?? '')
+  const [dateTo, setDateTo] = useState(saved.dateTo ?? '')
+  const [viewMode, setViewMode] = useState(saved.viewMode ?? 'summary') // 'summary' | 'items'
+  const [loadAll, setLoadAll] = useState(saved.loadAll ?? false) // false = last 30 days, true = full history
+  const [page, setPage] = useState(saved.page ?? 1)
   const [unpaidKpi, setUnpaidKpi] = useState(null) // server-side total AR (all-time, this branch)
   const PAGE_SIZE = 50
   const recentCutoff = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10)
   const [custType, setCustType] = useState('Customer') // new-invoice filter
-  const [typeView, setTypeView] = useState('Both') // list filter
-  const [saleTypeFilter, setSaleTypeFilter] = useState('All')
+  const [typeView, setTypeView] = useState(saved.typeView ?? 'Both') // list filter
+  const [saleTypeFilter, setSaleTypeFilter] = useState(saved.saleTypeFilter ?? 'All')
   const anyFilter = !!search || statusFilter !== 'All' || !!dateFrom || !!dateTo || typeView !== 'Both' || saleTypeFilter !== 'All'
   function resetFilters() { setSearch(''); setStatusFilter('All'); setDateFrom(''); setDateTo(''); setTypeView('Both'); setSaleTypeFilter('All') }
   const [modalOpen, setModalOpen] = useState(false)
@@ -71,8 +80,20 @@ export default function Invoices() {
   useEffect(() => {
     supabase.rpc('unpaid_summary', { p_location: activeLocation }).then(({ data }) => setUnpaidKpi(data || null))
   }, [activeLocation])
-  // Reset to the first page whenever the view or filters change
-  useEffect(() => { setPage(1) }, [search, statusFilter, typeView, saleTypeFilter, dateFrom, dateTo, viewMode, loadAll])
+  // Reset to the first page whenever the view or filters change — but not on the
+  // first render, or we'd clobber the page restored from the saved filters.
+  const firstRun = useRef(true)
+  useEffect(() => {
+    if (firstRun.current) { firstRun.current = false; return }
+    setPage(1)
+  }, [search, statusFilter, typeView, saleTypeFilter, dateFrom, dateTo, viewMode, loadAll])
+
+  // Remember the filters for this session
+  useEffect(() => {
+    sessionStorage.setItem(FILTERS_KEY, JSON.stringify({
+      search, statusFilter, typeView, saleTypeFilter, dateFrom, dateTo, viewMode, loadAll, page,
+    }))
+  }, [search, statusFilter, typeView, saleTypeFilter, dateFrom, dateTo, viewMode, loadAll, page])
 
   async function loadLists() {
     setPaymentOptions(await fetchListNames('payment_method', PAYMENT_FALLBACK))

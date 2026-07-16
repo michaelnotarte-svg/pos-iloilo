@@ -38,6 +38,7 @@ const EMPTY_PAYMENT = {
   mode_of_payment: 'Cash',
   deposit_date: '',
   remaining_balance: '',
+  notes: '',
 }
 
 function fmt(n) {
@@ -308,6 +309,7 @@ export default function InvoiceDetail() {
       mode_of_payment: p.mode_of_payment,
       deposit_date: p.deposit_date ?? '',
       remaining_balance: p.remaining_balance ?? '',
+      notes: p.notes ?? '',
     })
     setEditPayId(p.id)
     setPayError('')
@@ -326,6 +328,7 @@ export default function InvoiceDetail() {
       mode_of_payment: payForm.mode_of_payment,
       deposit_date: payForm.deposit_date || null,
       remaining_balance: payForm.remaining_balance ? Number(payForm.remaining_balance) : null,
+      notes: payForm.notes?.trim() || null,
     }
     let err
     if (editPayId) {
@@ -552,6 +555,7 @@ export default function InvoiceDetail() {
                   <th className="text-left px-4 py-3">Deposit Date</th>
                   <th className="text-right px-4 py-3">Amount Paid</th>
                   <th className="text-right px-4 py-3">Remaining</th>
+                  <th className="text-left px-4 py-3">Notes</th>
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
@@ -563,6 +567,7 @@ export default function InvoiceDetail() {
                     <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{p.deposit_date ?? '—'}</td>
                     <td className="px-4 py-3 text-right font-medium text-green-700">{money(p.amount_paid)}</td>
                     <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">{p.remaining_balance != null ? `${money(p.remaining_balance)}` : '—'}</td>
+                    <td className="px-4 py-3 text-gray-500 dark:text-gray-400 max-w-xs truncate" title={p.notes ?? ''}>{p.notes || '—'}</td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       {canEdit && <button onClick={() => openEditPayment(p)} className="text-blue-600 hover:underline text-xs mr-3">Edit</button>}
                       {canEdit && <button onClick={() => setDeletePayTarget(p)} className="text-red-500 hover:underline text-xs">Delete</button>}
@@ -700,6 +705,16 @@ export default function InvoiceDetail() {
                   className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
               <F label="Remaining Balance" value={payForm.remaining_balance} onChange={(v) => setPayForm({ ...payForm, remaining_balance: v })} type="number" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Notes</label>
+              <textarea
+                rows={2}
+                value={payForm.notes}
+                onChange={(e) => setPayForm({ ...payForm, notes: e.target.value })}
+                placeholder="e.g. check #, reference, partial payment details"
+                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
             </div>
             <ModalActions onCancel={() => setPayModal(false)} saving={savingPay} />
           </form>

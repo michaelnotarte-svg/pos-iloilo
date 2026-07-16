@@ -240,8 +240,10 @@ export default function PurchaseOrderDetail() {
   if (loading) return <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-20">Loading…</p>
   if (!po) return <p className="text-sm text-red-400 text-center py-20">PO not found.</p>
 
-  // Inventory awareness on the line form
+  // Inventory awareness on the line form. Both in-branch transfers and branch
+  // transfers draw FROM a warehouse, so availability is checked there.
   const isTransfer = !!po.from_storage
+  const isBranchTransfer = !!po.to_branch
   const availWarehouse = isTransfer ? po.from_storage : lineForm.storage
   const lineAvail = lookup(invMap, lineForm.item_id, availWarehouse)
   const inStock = inStockItemIds(invMap, availWarehouse)
@@ -338,9 +340,11 @@ export default function PurchaseOrderDetail() {
         ) : (
           <div className="px-6 py-4 grid grid-cols-2 sm:grid-cols-3 gap-x-8 gap-y-3 text-sm">
             <InfoRow label="Date" value={po.date} />
-            {po.from_storage
-              ? <InfoRow label="Transfer" value={`${po.from_storage} → ${po.storage}`} />
-              : <InfoRow label="Storage" value={po.storage} />}
+            {po.to_branch
+              ? <InfoRow label="Branch Transfer" value={`${po.from_storage ?? po.storage} → ${po.to_branch}`} />
+              : po.from_storage
+                ? <InfoRow label="Transfer" value={`${po.from_storage} → ${po.storage}`} />
+                : <InfoRow label="Storage" value={po.storage} />}
             {!po.from_storage && <InfoRow label="Source" value={po.source} />}
             {!po.from_storage && <InfoRow label="Supplier" value={po.supplier} />}
             <InfoRow label="Category" value={po.category} />

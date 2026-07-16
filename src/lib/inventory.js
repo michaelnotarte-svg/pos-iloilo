@@ -18,7 +18,7 @@ export async function fetchMovements(location = null, opts = {}) {
     return byItem(q)
   }
   const stockB = () => {
-    let q = supabase.from('stock_entries').select('date, item_id, batch_number, storage, boxes, kilos, items(name), purchase_orders!inner(from_storage, location)')
+    let q = supabase.from('stock_entries').select('date, item_id, batch_number, storage, boxes, kilos, items(name), purchase_orders!inner(from_storage, to_branch, location)')
     if (location) q = q.eq('purchase_orders.location', location)
     return byItem(q)
   }
@@ -44,9 +44,14 @@ export async function fetchMovements(location = null, opts = {}) {
 
   for (const r of stock ?? []) {
     const from = r.purchase_orders?.from_storage
+    const toBranch = r.purchase_orders?.to_branch
     const base = { date: r.date, item_id: r.item_id, item: r.items?.name ?? '—', batch: r.batch_number ?? '—' }
-    if (from) {
-      // Transfer: into destination (line storage), out of the from warehouse
+    if (toBranch) {
+      // Branch transfer: stock leaves this branch entirely — deduct only, no
+      // matching "in" (the receiving branch records its own intake).
+      m.push({ ...base, storage: from || r.storage, boxes: -num(r.boxes), kilos: -num(r.kilos), type: 'Branch Out' })
+    } else if (from) {
+      // In-branch transfer: into destination (line storage), out of the from warehouse
       m.push({ ...base, storage: r.storage, boxes: num(r.boxes), kilos: num(r.kilos), type: 'Transfer In' })
       m.push({ ...base, storage: from, boxes: -num(r.boxes), kilos: -num(r.kilos), type: 'Transfer Out' })
     } else {

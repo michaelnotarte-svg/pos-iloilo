@@ -5,11 +5,15 @@ import { fetchListNames, STORAGE_FALLBACK } from '../lib/lists'
 import ManageListModal from '../components/ManageListModal'
 import { useAuth } from '../lib/auth'
 
+// Category that means "stock is leaving this branch for another branch"
+const BRANCH_TRANSFER = 'Branch Transfer'
+
 const EMPTY_FORM = {
   po_number: '',
   date: new Date().toISOString().slice(0, 10),
   storage: 'Everest',
   from_storage: '',
+  to_branch: '',
   supplier: '',
   source: '',
   category: '',
@@ -18,7 +22,7 @@ const EMPTY_FORM = {
 
 export default function PurchaseOrders() {
   const navigate = useNavigate()
-  const { activeLocation, canWrite } = useAuth()
+  const { activeLocation, canWrite, locations } = useAuth()
   const canEdit = canWrite('Stocks')
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
@@ -123,6 +127,9 @@ export default function PurchaseOrders() {
   const summaryPage = summaryRows.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE)
   const poPage = filtered.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE)
 
+  // Branches a branch transfer can go to (everything except the one you're in)
+  const otherBranches = (locations ?? []).filter((l) => l !== activeLocation)
+
   function openAdd() {
     setForm(EMPTY_FORM)
     setError('')
@@ -130,16 +137,28 @@ export default function PurchaseOrders() {
   }
 
   function set(field, value) {
-    setForm((f) => ({ ...f, [field]: value }))
+    setForm((f) => {
+      const next = { ...f, [field]: value }
+      // Picking "Branch Transfer" auto-selects the only other branch
+      if (field === 'category' && value === BRANCH_TRANSFER && !next.to_branch) {
+        next.to_branch = otherBranches[0] ?? ''
+      }
+      return next
+    })
   }
 
   async function handleSave(e) {
     e.preventDefault()
     if (!form.date) { setError('Date is required.'); return }
     const isTransfer = form.category === 'Transfer'
+    const isBranchTransfer = form.category === BRANCH_TRANSFER
     if (isTransfer) {
       if (!form.from_storage) { setError('From warehouse is required for a transfer.'); return }
       if (form.from_storage === form.storage) { setError('From and To warehouses must be different.'); return }
+    }
+    if (isBranchTransfer) {
+      if (!form.from_storage) { setError('Source warehouse is required for a branch transfer.'); return }
+      if (!form.to_branch) { setError('No other branch to transfer to.'); return }
     }
     setSaving(true)
     setError('')
@@ -147,10 +166,12 @@ export default function PurchaseOrders() {
       po_number: form.po_number.trim() || null,
       location: activeLocation,
       date: form.date,
-      storage: form.storage,
-      from_storage: isTransfer ? form.from_storage : null,
-      supplier: isTransfer ? null : (form.supplier.trim() || null),
-      source: isTransfer ? null : (form.source.trim() || null),
+      // A branch transfer only leaves a warehouse — source and line storage are the same
+      storage: isBranchTransfer ? form.from_storage : form.storage,
+      from_storage: isTransfer || isBranchTransfer ? form.from_storage : null,
+      to_branch: isBranchTransfer ? form.to_branch : null,
+      supplier: isTransfer || isBranchTransfer ? null : (form.supplier.trim() || null),
+      source: isTransfer || isBranchTransfer ? null : (form.source.trim() || null),
       category: form.category.trim() || null,
       notes: form.notes.trim() || null,
     }
@@ -355,7 +376,11 @@ export default function PurchaseOrders() {
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl w-full max-w-lg mx-4">
             <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
-              <h2 className="font-semibold text-gray-800 dark:text-gray-100">{form.category === 'Transfer' ? 'New Stock Transfer' : 'New Stock Delivery'}</h2>
+              <h2 className="font-semibold text-gray-800 dark:text-gray-100">
+                {form.category === BRANCH_TRANSFER
+                  ? `New Branch Transfer${form.to_branch ? ` → ${form.to_branch}` : ''}`
+                  : form.category === 'Transfer' ? 'New Stock Transfer' : 'New Stock Delivery'}
+              </h2>
               <button onClick={() => setModalOpen(false)} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 text-xl leading-none">&times;</button>
             </div>
             <form onSubmit={handleSave} className="px-6 py-4 space-y-3">
@@ -374,24 +399,40 @@ export default function PurchaseOrders() {
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">{form.category === 'Transfer' ? 'To Warehouse *' : 'Storage *'}</label>
-                    <button type="button" onClick={() => setManageList('storage')} className="text-[11px] text-blue-600 hover:underline">Manage</button>
+                {form.category === BRANCH_TRANSFER ? (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">To Branch</label>
+                    <select
+                      value={form.to_branch}
+                      onChange={(e) => set('to_branch', e.target.value)}
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {otherBranches.length === 0 && <option value="">No other branch</option>}
+                      {otherBranches.map((b) => <option key={b}>{b}</option>)}
+                    </select>
                   </div>
-                  <select
-                    value={form.storage}
-                    onChange={(e) => set('storage', e.target.value)}
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    {storageOptions.map((s) => <option key={s}>{s}</option>)}
-                  </select>
-                </div>
+                ) : (
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">{form.category === 'Transfer' ? 'To Warehouse *' : 'Storage *'}</label>
+                      <button type="button" onClick={() => setManageList('storage')} className="text-[11px] text-blue-600 hover:underline">Manage</button>
+                    </div>
+                    <select
+                      value={form.storage}
+                      onChange={(e) => set('storage', e.target.value)}
+                      className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {storageOptions.map((s) => <option key={s}>{s}</option>)}
+                    </select>
+                  </div>
+                )}
               </div>
 
-              {form.category === 'Transfer' ? (
+              {form.category === 'Transfer' || form.category === BRANCH_TRANSFER ? (
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">From Warehouse *</label>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">
+                    {form.category === BRANCH_TRANSFER ? 'Source Warehouse *' : 'From Warehouse *'}
+                  </label>
                   <select
                     value={form.from_storage}
                     onChange={(e) => set('from_storage', e.target.value)}
@@ -400,7 +441,11 @@ export default function PurchaseOrders() {
                     <option value="">Select source warehouse…</option>
                     {storageOptions.map((s) => <option key={s}>{s}</option>)}
                   </select>
-                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Stock will be deducted from here and added to the destination warehouse.</p>
+                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">
+                    {form.category === BRANCH_TRANSFER
+                      ? `Stock will be deducted from this warehouse and sent to ${form.to_branch || 'the other branch'}. ${activeLocation} inventory only stocks out — the receiving branch records its own intake.`
+                      : 'Stock will be deducted from here and added to the destination warehouse.'}
+                  </p>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 gap-3">
