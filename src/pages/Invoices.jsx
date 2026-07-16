@@ -56,7 +56,7 @@ export default function Invoices() {
   const [manageStorage, setManageStorage] = useState(false)
   const [manageCustomers, setManageCustomers] = useState(false)
 
-  useEffect(() => { fetchAll(); loadPayments() }, [activeLocation, loadAll])
+  useEffect(() => { fetchAll(); loadPayments() }, [activeLocation, loadAll, dateFrom, dateTo])
   // Always-accurate AR for the branch (independent of the load window)
   useEffect(() => {
     supabase.rpc('unpaid_summary', { p_location: activeLocation }).then(({ data }) => setUnpaidKpi(data || null))
@@ -77,10 +77,16 @@ export default function Invoices() {
   async function fetchAll() {
     setLoading(true)
     const sel = '*, customers(business_name, display_name, type), invoice_lines(amount, boxes, kilos, batch_number, items(name)), partial_payments(amount_paid)'
-    const base = () => supabase.from('invoices').select(sel).eq('location', activeLocation).order('date', { ascending: false })
-    const invP = loadAll
-      ? selectAll(base) // full history, paginated past the 1000-row cap
-      : base().gte('date', recentCutoff).then((r) => r.data ?? []) // last 30 days only
+    // Narrow on the SERVER: an explicit date range wins; otherwise last 30 days
+    // unless "Show all" is on. selectAll() pages past the 1000-row cap as needed.
+    const base = () => {
+      let q = supabase.from('invoices').select(sel).eq('location', activeLocation).order('date', { ascending: false })
+      if (dateFrom) q = q.gte('date', dateFrom)
+      if (dateTo) q = q.lte('date', dateTo)
+      if (!dateFrom && !dateTo && !loadAll) q = q.gte('date', recentCutoff)
+      return q
+    }
+    const invP = selectAll(base)
     const [invData, { data: custData }] = await Promise.all([
       invP,
       supabase.from('customers').select('id, business_name, display_name, type').eq('location', activeLocation).order('business_name'),
@@ -219,7 +225,7 @@ export default function Invoices() {
         </div>
         {anyFilter && <button onClick={resetFilters} className="text-xs text-blue-600 hover:underline self-center">Reset filters</button>}
         <div className="flex items-center gap-2 text-xs self-center ml-auto">
-          <span className="text-gray-400 dark:text-gray-500">{loadAll ? 'All history' : 'Last 30 days'}{!loading && ` · ${filtered.length}`}</span>
+          <span className="text-gray-400 dark:text-gray-500">{(dateFrom || dateTo) ? 'Selected range' : loadAll ? 'All history' : 'Last 30 days'}{!loading && ` · ${filtered.length}`}</span>
           <button onClick={() => setLoadAll((v) => !v)} className="text-blue-600 hover:underline">{loadAll ? 'Show recent' : 'Show all'}</button>
         </div>
       </div>
@@ -227,7 +233,11 @@ export default function Invoices() {
       {loading ? (
         <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-12">Loading…</p>
       ) : filtered.length === 0 ? (
-        <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-12">No invoices found.</p>
+        <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-12">
+          {!dateFrom && !dateTo && !loadAll
+            ? 'No invoices in the last 30 days — pick a date range above, or choose “Show all”.'
+            : 'No invoices found.'}
+        </p>
       ) : viewMode === 'items' ? (
         <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
           <table className="w-full text-sm">

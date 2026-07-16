@@ -47,7 +47,7 @@ export default function PurchaseOrders() {
   const anyFilter = !!search || whFilter !== 'All' || catFilter !== 'All' || !!dateFrom || !!dateTo
   function resetFilters() { setSearch(''); setWhFilter('All'); setCatFilter('All'); setDateFrom(''); setDateTo('') }
 
-  useEffect(() => { fetchOrders(); loadLists() }, [activeLocation, loadAll])
+  useEffect(() => { fetchOrders(); loadLists() }, [activeLocation, loadAll, dateFrom, dateTo])
   // Reset to the first page whenever the view or filters change
   useEffect(() => { setPage(1) }, [search, whFilter, catFilter, dateFrom, dateTo, viewMode, loadAll])
 
@@ -62,10 +62,16 @@ export default function PurchaseOrders() {
   async function fetchOrders() {
     setLoading(true)
     const sel = '*, stock_entries(boxes, kilos, storage, items(name))'
-    const base = () => supabase.from('purchase_orders').select(sel).eq('location', activeLocation).order('date', { ascending: false })
-    const rows = loadAll
-      ? await selectAll(base) // full history, paginated past the 1000-row cap
-      : ((await base().gte('date', recentCutoff)).data ?? []) // last 30 days only
+    // Narrow on the SERVER: an explicit date range wins; otherwise last 30 days
+    // unless "Show all" is on. selectAll() pages past the 1000-row cap as needed.
+    const base = () => {
+      let q = supabase.from('purchase_orders').select(sel).eq('location', activeLocation).order('date', { ascending: false })
+      if (dateFrom) q = q.gte('date', dateFrom)
+      if (dateTo) q = q.lte('date', dateTo)
+      if (!dateFrom && !dateTo && !loadAll) q = q.gte('date', recentCutoff)
+      return q
+    }
+    const rows = await selectAll(base)
 
     const enriched = rows.map((po) => {
       const entries = po.stock_entries ?? []
@@ -225,7 +231,7 @@ export default function PurchaseOrders() {
         </div>
         {anyFilter && <button onClick={resetFilters} className="text-xs text-blue-600 hover:underline self-center">Reset filters</button>}
         <div className="flex items-center gap-2 text-xs self-center ml-auto">
-          <span className="text-gray-400 dark:text-gray-500">{loadAll ? 'All history' : 'Last 30 days'}{!loading && ` · ${filtered.length}`}</span>
+          <span className="text-gray-400 dark:text-gray-500">{(dateFrom || dateTo) ? 'Selected range' : loadAll ? 'All history' : 'Last 30 days'}{!loading && ` · ${filtered.length}`}</span>
           <button onClick={() => setLoadAll((v) => !v)} className="text-blue-600 hover:underline">{loadAll ? 'Show recent' : 'Show all'}</button>
         </div>
       </div>
