@@ -4,6 +4,7 @@ import { supabase, selectAll } from '../lib/supabase'
 import { fetchListNames, STORAGE_FALLBACK } from '../lib/lists'
 import ManageListModal from '../components/ManageListModal'
 import { useAuth } from '../lib/auth'
+import { friendlyError } from '../lib/friendlyError'
 
 // Category that means "stock is leaving this branch for another branch"
 const BRANCH_TRANSFER = 'Branch Transfer'
@@ -22,7 +23,7 @@ const EMPTY_FORM = {
 
 export default function PurchaseOrders() {
   const navigate = useNavigate()
-  const { activeLocation, canWrite, locations } = useAuth()
+  const { activeLocation, canWrite, locations, profile } = useAuth()
   const canEdit = canWrite('Stocks')
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
@@ -181,7 +182,7 @@ export default function PurchaseOrders() {
       .select()
       .single()
     setSaving(false)
-    if (err) { setError(err.message); return }
+    if (err) { setError(friendlyError(err, { profile, module: 'Stocks' })); return }
     setModalOpen(false)
     navigate(`/stocks/${data.id}`)
   }

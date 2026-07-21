@@ -8,6 +8,7 @@ import { fetchMovements, onHandMap, lookup, inStockItemIds, avgKgBox, itemAvgMap
 import { useAuth } from '../lib/auth'
 import AttributionNote from '../components/AttributionNote'
 import SearchSelect from '../components/SearchSelect'
+import { friendlyError } from '../lib/friendlyError'
 
 const STATUSES = ['Unpaid', 'Partial', 'Paid']
 
@@ -48,7 +49,7 @@ function fmt(n) {
 export default function InvoiceDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { activeLocation, canWrite } = useAuth()
+  const { activeLocation, canWrite, profile } = useAuth()
   const canEdit = canWrite('Sales')
 
   const [inv, setInv] = useState(null)
@@ -244,7 +245,7 @@ export default function InvoiceDetail() {
       err = e2
       lineId = data?.id
     }
-    if (err) { setSavingLine(false); setLineError(err.message); setOversell(null); return }
+    if (err) { setSavingLine(false); setLineError(friendlyError(err, { profile, module: 'Sales' })); setOversell(null); return }
 
     // Write the FIFO allocation rows
     const allocRows = allocs.map((a) => ({
@@ -337,7 +338,7 @@ export default function InvoiceDetail() {
       ;({ error: err } = await supabase.from('partial_payments').insert(payload))
     }
     setSavingPay(false)
-    if (err) { setPayError(err.message); return }
+    if (err) { setPayError(friendlyError(err, { profile, module: 'Sales' })); return }
     setPayModal(false)
     await recomputeStatus()
     fetchAll()

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
+import { friendlyError } from '../lib/friendlyError'
 import AttributionNote from '../components/AttributionNote'
 import { money } from '../lib/settings'
 
@@ -43,7 +44,7 @@ function periodRanges(now) {
 }
 
 export default function Expenses() {
-  const { activeLocation, canWrite } = useAuth()
+  const { activeLocation, canWrite, profile } = useAuth()
   const canEdit = canWrite('Expense')
   const [expenses, setExpenses] = useState([])
   const [categories, setCategories] = useState([])
@@ -166,7 +167,7 @@ export default function Expenses() {
       ;({ error: err } = await supabase.from('expenses').insert(payload))
     }
     setSaving(false)
-    if (err) { setError(err.message); return }
+    if (err) { setError(friendlyError(err, { profile, module: 'Expense' })); return }
     setModalOpen(false)
     fetchAll()
   }
@@ -186,7 +187,7 @@ export default function Expenses() {
     setCatError('')
     const { error: err } = await supabase.from('expense_categories').insert({ name: newCatName.trim() })
     setSavingCat(false)
-    if (err) { setCatError(err.message); return }
+    if (err) { setCatError(friendlyError(err, { profile, module: 'Expense' })); return }
     setNewCatName('')
     fetchCategories()
   }

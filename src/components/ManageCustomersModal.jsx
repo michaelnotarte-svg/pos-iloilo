@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
+import { friendlyError } from '../lib/friendlyError'
 
 /**
  * Quick customer manager — add (display + business name + type) and remove.
@@ -12,7 +13,7 @@ import { useAuth } from '../lib/auth'
  *   defaultType      - 'Customer' | 'BN' — preselects the type toggle
  */
 export default function ManageCustomersModal({ onClose, onChange, defaultType = 'Customer' }) {
-  const { activeLocation } = useAuth()
+  const { activeLocation, profile } = useAuth()
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(true)
   const [display, setDisplay] = useState('')
@@ -48,7 +49,7 @@ export default function ManageCustomersModal({ onClose, onChange, defaultType = 
       location: activeLocation,
     }).select().single()
     setSaving(false)
-    if (err) { setError(err.message); return }
+    if (err) { setError(friendlyError(err, { profile, module: 'Sales' })); return }
     setDisplay(''); setBusiness('')
     await load()
     onChange?.(data?.id)   // hand the new id back so the form can select it

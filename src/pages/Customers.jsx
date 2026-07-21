@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
+import { friendlyError } from '../lib/friendlyError'
 
 const EMPTY_FORM = {
   type: 'Customer',
@@ -13,7 +14,7 @@ const EMPTY_FORM = {
 }
 
 export default function Customers() {
-  const { activeLocation, canWrite } = useAuth()
+  const { activeLocation, canWrite, profile } = useAuth()
   const canEdit = canWrite('Sales')
   const [customers, setCustomers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -97,7 +98,7 @@ export default function Customers() {
       ;({ error: err } = await supabase.from('customers').insert(payload))
     }
     setSaving(false)
-    if (err) { setError(err.message); return }
+    if (err) { setError(friendlyError(err, { profile, module: 'Sales' })); return }
     setModalOpen(false)
     fetchCustomers()
   }

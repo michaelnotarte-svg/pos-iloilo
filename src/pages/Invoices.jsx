@@ -7,6 +7,7 @@ import ManageListModal from '../components/ManageListModal'
 import ManageCustomersModal from '../components/ManageCustomersModal'
 import SearchSelect from '../components/SearchSelect'
 import { useAuth } from '../lib/auth'
+import { friendlyError } from '../lib/friendlyError'
 
 const STATUSES = ['Unpaid', 'Partial', 'Paid']
 
@@ -42,7 +43,7 @@ const EMPTY_FORM = {
 
 export default function Invoices() {
   const navigate = useNavigate()
-  const { activeLocation, canWrite } = useAuth()
+  const { activeLocation, canWrite, profile } = useAuth()
   const canEdit = canWrite('Sales')
   // Filters survive navigating into an invoice and back (kept for the browser session)
   const [saved] = useState(loadSavedFilters)
@@ -216,7 +217,7 @@ export default function Invoices() {
     }
     const { data, error: err } = await supabase.from('invoices').insert(payload).select().single()
     setSaving(false)
-    if (err) { setError(err.message); return }
+    if (err) { setError(friendlyError(err, { profile, module: 'Sales' })); return }
     setModalOpen(false)
     navigate(`/invoices/${data.id}`)
   }

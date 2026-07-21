@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { fetchListNames } from '../lib/lists'
 import ManageListModal from '../components/ManageListModal'
 import { useAuth } from '../lib/auth'
+import { friendlyError } from '../lib/friendlyError'
 
 const EMPTY_FORM = { base_name: '', brand: '', category: '' }
 
@@ -13,7 +14,7 @@ function buildName(base, brand) {
 }
 
 export default function Items() {
-  const { activeLocation, canWrite } = useAuth()
+  const { activeLocation, canWrite, profile } = useAuth()
   const canEdit = canWrite(['Stocks', 'Sales'])
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
@@ -90,7 +91,7 @@ export default function Items() {
       ;({ error: err } = await supabase.from('items').insert(payload))
     }
     setSaving(false)
-    if (err) { setError(err.message); return }
+    if (err) { setError(friendlyError(err, { profile })); return }
     setModalOpen(false)
     fetchItems()
   }

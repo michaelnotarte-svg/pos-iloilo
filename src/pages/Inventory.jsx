@@ -4,6 +4,7 @@ import { fetchListNames, STORAGE_FALLBACK } from '../lib/lists'
 import ManageListModal from '../components/ManageListModal'
 import { getThresholds, stockStatus } from '../lib/settings'
 import { useAuth } from '../lib/auth'
+import { friendlyError } from '../lib/friendlyError'
 import { downloadCSV } from '../lib/csv'
 import { fetchMovements } from '../lib/inventory'
 import ReportLetterhead from '../components/ReportLetterhead'
@@ -73,7 +74,7 @@ export default function Inventory() {
 
   const [manageStorage, setManageStorage] = useState(false)
   const [overrides, setOverrides] = useState([])
-  const { isAdmin, activeLocation, canWrite } = useAuth()
+  const { isAdmin, activeLocation, canWrite, profile } = useAuth()
   const canAdjust = canWrite('Inventory')
 
   useEffect(() => { fetchAll(); loadOverrides() }, [activeLocation])
@@ -241,7 +242,7 @@ export default function Inventory() {
       reason: adjForm.reason.trim() || null,
     })
     setAdjSaving(false)
-    if (err) { setAdjError(err.message); return }
+    if (err) { setAdjError(friendlyError(err, { profile, module: 'Inventory' })); return }
     setAdjOpen(false)
     fetchAll()
   }

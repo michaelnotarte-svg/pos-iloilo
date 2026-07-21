@@ -5,6 +5,7 @@ import { fetchListNames, STORAGE_FALLBACK } from '../lib/lists'
 import ManageListModal from '../components/ManageListModal'
 import { fetchMovements, onHandMap, lookup, inStockItemIds, avgKgBox } from '../lib/inventory'
 import { useAuth } from '../lib/auth'
+import { friendlyError } from '../lib/friendlyError'
 import AttributionNote from '../components/AttributionNote'
 
 const EMPTY_LINE = {
@@ -24,7 +25,7 @@ function buildItemName(base, brand) {
 export default function PurchaseOrderDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { activeLocation, canWrite } = useAuth()
+  const { activeLocation, canWrite, profile } = useAuth()
   const canEdit = canWrite('Stocks')
 
   const [po, setPo] = useState(null)
@@ -170,7 +171,7 @@ export default function PurchaseOrderDetail() {
       .select('id, name')
       .single()
     setQuickAddSaving(false)
-    if (err) { setQuickAddError(err.message); return }
+    if (err) { setQuickAddError(friendlyError(err, { profile, module: 'Stocks' })); return }
     // Refresh the dropdown list, then select the new item
     const { data: itemsData } = await supabase.from('items').select('id, name').eq('location', activeLocation).order('name')
     setItems(itemsData ?? [])
@@ -216,7 +217,7 @@ export default function PurchaseOrderDetail() {
       ;({ error: err } = await supabase.from('stock_entries').insert(payload))
     }
     setSavingLine(false)
-    if (err) { setLineError(err.message); return }
+    if (err) { setLineError(friendlyError(err, { profile, module: 'Stocks' })); return }
     setLineModal(false)
     fetchAll()
   }
