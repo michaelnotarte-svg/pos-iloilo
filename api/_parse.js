@@ -65,9 +65,12 @@ export async function parseReceipt(body, apiKey) {
       max_tokens: 2500,
       messages: [{
         role: 'user',
+        // Glossary FIRST with cache_control so the big, identical item/customer
+        // list is cached and reused across a batch (~10% cost on cache hits);
+        // the per-receipt image comes AFTER the cache breakpoint (never cached).
         content: [
+          { type: 'text', text: buildPrompt(items, customers), cache_control: { type: 'ephemeral' } },
           { type: 'image', source: { type: 'base64', media_type, data: image } },
-          { type: 'text', text: buildPrompt(items, customers) },
         ],
       }],
     }),
@@ -75,7 +78,11 @@ export async function parseReceipt(body, apiKey) {
 
   if (!res.ok) {
     const detail = await res.text()
-    return { ok: false, status: 502, json: { error: `Anthropic ${res.status}`, detail } }
+    // Surface Anthropic's actual message (e.g. "credit balance is too low")
+    // instead of a bare status code.
+    let error = `Anthropic error (${res.status})`
+    try { const j = JSON.parse(detail); if (j?.error?.message) error = j.error.message } catch { /* keep default */ }
+    return { ok: false, status: 502, json: { error, detail } }
   }
   const data = await res.json()
   const text = (data.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('')
