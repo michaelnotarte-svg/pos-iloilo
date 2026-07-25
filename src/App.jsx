@@ -8,6 +8,7 @@ import PurchaseOrders from './pages/PurchaseOrders'
 import PurchaseOrderDetail from './pages/PurchaseOrderDetail'
 import Invoices from './pages/Invoices'
 import InvoiceDetail from './pages/InvoiceDetail'
+import ImportInvoices from './pages/ImportInvoices'
 import Expenses from './pages/Expenses'
 import Inventory from './pages/Inventory'
 import Settings from './pages/Settings'
@@ -36,6 +37,7 @@ function Gate() {
           <Route path="/snapshot" element={<Snapshot />} />
           <Route path="/executive" element={<Executive />} />
           <Route path="/invoices" element={<Invoices />} />
+          <Route path="/invoices/import" element={<ImportInvoices />} />
           <Route path="/invoices/:id" element={<InvoiceDetail />} />
           <Route path="/stocks" element={<PurchaseOrders />} />
           <Route path="/stocks/:id" element={<PurchaseOrderDetail />} />

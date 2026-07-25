@@ -20,4 +20,8 @@
   main { overflow: visible !important; }
   html, body { background: #fff !important; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* Paginated tables: repeat column headers on every page and avoid splitting rows */
+  .overflow-x-auto { overflow: visible !important; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; }
 }

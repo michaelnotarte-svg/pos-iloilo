@@ -5,9 +5,11 @@ import { money } from '../lib/settings'
 import { fetchListNames, PAYMENT_FALLBACK, STORAGE_FALLBACK, SALE_TYPE_FALLBACK } from '../lib/lists'
 import ManageListModal from '../components/ManageListModal'
 import ManageCustomersModal from '../components/ManageCustomersModal'
+import ReportLetterhead from '../components/ReportLetterhead'
 import SearchSelect from '../components/SearchSelect'
 import { useAuth } from '../lib/auth'
 import { friendlyError } from '../lib/friendlyError'
+import { downloadCSV } from '../lib/csv'
 
 const STATUSES = ['Unpaid', 'Partial', 'Paid']
 
@@ -55,6 +57,7 @@ export default function Invoices() {
   const [dateFrom, setDateFrom] = useState(saved.dateFrom ?? '')
   const [dateTo, setDateTo] = useState(saved.dateTo ?? '')
   const [viewMode, setViewMode] = useState(saved.viewMode ?? 'summary') // 'summary' | 'items'
+  const [printing, setPrinting] = useState(false) // render ALL filtered rows for print, not just the page
   const [loadAll, setLoadAll] = useState(saved.loadAll ?? false) // false = last 30 days, true = full history
   const [page, setPage] = useState(saved.page ?? 1)
   const [unpaidKpi, setUnpaidKpi] = useState(null) // server-side total AR (all-time, this branch)
@@ -99,7 +102,7 @@ export default function Invoices() {
   async function loadLists() {
     setPaymentOptions(await fetchListNames('payment_method', PAYMENT_FALLBACK))
     setStorageOptions(await fetchListNames('storage', STORAGE_FALLBACK, activeLocation))
-    setSaleTypeOptions(await fetchListNames('sale_type', SALE_TYPE_FALLBACK))
+    setSaleTypeOptions(await fetchListNames('sale_type', SALE_TYPE_FALLBACK, activeLocation))
     setSalesPersonOptions(await fetchListNames('sales_person', [], activeLocation))
   }
 
@@ -194,6 +197,62 @@ export default function Invoices() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const pageSafe = Math.min(page, totalPages)
   const pageRows = filtered.slice((pageSafe - 1) * PAGE_SIZE, pageSafe * PAGE_SIZE)
+  // When printing, show the whole filtered set (all pages); on screen, just the page.
+  const rowsToShow = printing ? filtered : pageRows
+
+  const rangeLabel = (dateFrom || dateTo)
+    ? `${dateFrom || '…'} → ${dateTo || '…'}`
+    : (loadAll ? 'All history' : 'Last 30 days')
+
+  // Print: swap to all-rows, drop dark mode, print, then restore.
+  useEffect(() => {
+    if (!printing) return
+    const wasDark = document.documentElement.classList.contains('dark')
+    if (wasDark) document.documentElement.classList.remove('dark')
+    window.print()
+    if (wasDark) document.documentElement.classList.add('dark')
+    setPrinting(false)
+  }, [printing])
+
+  function exportCSV() {
+    const scope = (dateFrom || dateTo)
+      ? `${dateFrom || 'start'}_to_${dateTo || 'end'}`
+      : (loadAll ? 'all' : 'last30d')
+    const cust = (inv) => inv.customers ? (inv.customers.display_name || inv.customers.business_name) : 'Walk-in'
+    if (viewMode === 'items') {
+      const rows = filtered.flatMap((inv) => {
+        const lines = inv.invoice_lines ?? []
+        if (!lines.length) return [{ number: inv.invoice_number, date: inv.date, customer: cust(inv), item: '(no items)', batch: '', boxes: '', kilos: '', amount: '' }]
+        return lines.map((l) => ({
+          number: inv.invoice_number, date: inv.date, customer: cust(inv),
+          item: l.items?.name ?? '', batch: l.batch_number ?? '',
+          boxes: l.boxes ?? '', kilos: l.kilos ?? '', amount: Number(l.amount || 0).toFixed(2),
+        }))
+      })
+      downloadCSV(`invoices_${activeLocation}_items_${scope}.csv`, rows, [
+        { key: 'number', label: 'Invoice #' }, { key: 'date', label: 'Date' }, { key: 'customer', label: 'Customer' },
+        { key: 'item', label: 'Item' }, { key: 'batch', label: 'Batch(es)' }, { key: 'boxes', label: 'Boxes' },
+        { key: 'kilos', label: 'Kilos' }, { key: 'amount', label: 'Amount' },
+      ])
+    } else {
+      const rows = filtered.map((inv) => {
+        const total = grandTotal(inv), paid = paidOf(inv)
+        return {
+          number: inv.invoice_number, date: inv.date, customer: cust(inv),
+          type: inv.customers?.type ?? 'Customer', sale_type: inv.sale_type ?? '',
+          warehouse: inv.storage ?? '', sales_person: inv.sales_person ?? '',
+          amount: total.toFixed(2), paid: paid.toFixed(2), balance: (total - paid).toFixed(2),
+          status: derivedStatus(inv),
+        }
+      })
+      downloadCSV(`invoices_${activeLocation}_${scope}.csv`, rows, [
+        { key: 'number', label: 'Invoice #' }, { key: 'date', label: 'Date' }, { key: 'customer', label: 'Customer' },
+        { key: 'type', label: 'Type' }, { key: 'sale_type', label: 'Sale Type' }, { key: 'warehouse', label: 'Warehouse' },
+        { key: 'sales_person', label: 'Sales Person' }, { key: 'amount', label: 'Amount' }, { key: 'paid', label: 'Paid' },
+        { key: 'balance', label: 'Balance' }, { key: 'status', label: 'Status' },
+      ])
+    }
+  }
 
   function set(field, value) { setForm((f) => ({ ...f, [field]: value })) }
 
@@ -224,20 +283,55 @@ export default function Invoices() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
+      {/* Print-only report header (repeats the business letterhead + scope) */}
+      <div className="hidden print:block mb-4">
+        <ReportLetterhead date={new Date().toISOString().slice(0, 10)} subtitle="Invoices Report" />
+        <p className="text-xs text-gray-600 mb-3">
+          {activeLocation} · {rangeLabel} · {filtered.length} invoice{filtered.length !== 1 ? 's' : ''}
+          {statusFilter !== 'All' && ` · Status: ${statusFilter}`}
+          {saleTypeFilter !== 'All' && ` · Sale type: ${saleTypeFilter}`}
+          {typeView !== 'Both' && ` · ${typeView}`}
+          {search && ` · Search: “${search}”`}
+        </p>
+      </div>
+
+      <div className="no-print flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-100">Invoices</h1>
-        {canEdit && (
-        <button
-          onClick={() => { setForm(EMPTY_FORM); setError(''); setModalOpen(true) }}
-          className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg"
-        >
-          + New Invoice
-        </button>
-        )}
+        <div className="flex items-center gap-2">
+          <button onClick={exportCSV} disabled={!filtered.length}
+            className="border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/40 disabled:opacity-40 text-sm font-medium px-4 py-2 rounded-lg">
+            Export CSV
+          </button>
+          <button
+            onClick={() => {
+              if (filtered.length > 1000 && !window.confirm(`This will lay out ${filtered.length.toLocaleString()} invoices for printing, which may be slow. Narrow the filters for a smaller report, or continue?`)) return
+              setPrinting(true)
+            }}
+            disabled={!filtered.length}
+            className="border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/40 disabled:opacity-40 text-sm font-medium px-4 py-2 rounded-lg">
+            Print / PDF
+          </button>
+          {canEdit && activeLocation === 'Bacolod' && (
+            <button
+              onClick={() => navigate('/invoices/import')}
+              className="border border-blue-600 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-500/10 text-sm font-medium px-4 py-2 rounded-lg"
+            >
+              Import from Photos
+            </button>
+          )}
+          {canEdit && (
+          <button
+            onClick={() => { setForm(EMPTY_FORM); setError(''); setModalOpen(true) }}
+            className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg"
+          >
+            + New Invoice
+          </button>
+          )}
+        </div>
       </div>
 
       {/* KPI cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+      <div className="no-print grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
         <div className="rounded-xl border border-red-200 dark:border-red-500/30 bg-red-50 dark:bg-red-500/10 px-4 py-3">
           <p className="text-xs uppercase tracking-wide text-gray-400 dark:text-gray-500">Unpaid Invoices</p>
           <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{uCount}</p>
@@ -250,7 +344,7 @@ export default function Invoices() {
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-2 mb-4">
+      <div className="no-print flex flex-wrap gap-2 mb-4">
         <input
           type="text"
           placeholder="Search by invoice # or customer…"
@@ -368,7 +462,7 @@ export default function Invoices() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-800">
-              {pageRows.flatMap((inv) => {
+              {rowsToShow.flatMap((inv) => {
                 const cust = inv.customers ? (inv.customers.display_name || inv.customers.business_name) : 'Walk-in'
                 const lines = inv.invoice_lines ?? []
                 if (lines.length === 0) return [(
@@ -411,7 +505,7 @@ export default function Invoices() {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-gray-700 bg-white dark:bg-gray-800">
-              {pageRows.map((inv) => {
+              {rowsToShow.map((inv) => {
                 const total = grandTotal(inv), paid = paidOf(inv), bal = total - paid
                 const st = derivedStatus(inv)
                 return (
@@ -439,8 +533,8 @@ export default function Invoices() {
         </div>
       )}
 
-      {!loading && filtered.length > PAGE_SIZE && (
-        <div className="flex items-center justify-between mt-3 text-sm">
+      {!loading && !printing && filtered.length > PAGE_SIZE && (
+        <div className="no-print flex items-center justify-between mt-3 text-sm">
           <span className="text-gray-400 dark:text-gray-500 text-xs">
             {(pageSafe - 1) * PAGE_SIZE + 1}–{Math.min(pageSafe * PAGE_SIZE, filtered.length)} of {filtered.length}
           </span>

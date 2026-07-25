@@ -98,7 +98,7 @@ export default function InvoiceDetail() {
   async function loadLists() {
     setStorageOptions(await fetchListNames('storage', STORAGE_FALLBACK, activeLocation))
     setPaymentOptions(await fetchListNames('payment_method', PAYMENT_FALLBACK))
-    setSaleTypeOptions(await fetchListNames('sale_type', SALE_TYPE_FALLBACK))
+    setSaleTypeOptions(await fetchListNames('sale_type', SALE_TYPE_FALLBACK, activeLocation))
     setSalesPersonOptions(await fetchListNames('sales_person', [], activeLocation))
   }
 

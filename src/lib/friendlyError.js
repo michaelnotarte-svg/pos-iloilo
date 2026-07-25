@@ -8,6 +8,13 @@
 export function friendlyError(err, { profile, module } = {}) {
   if (!err) return ''
   const msg = err.message || String(err)
+
+  // Unique-constraint violation (e.g. two invoices with the same number).
+  if (err.code === '23505' || /duplicate key value|already exists/i.test(msg)) {
+    if (/invoice_number/i.test(msg)) return 'That invoice # is already used. Enter a different number.'
+    return 'That value already exists — it needs to be unique.'
+  }
+
   const isRls = err.code === '42501' || /row-level security/i.test(msg)
   if (!isRls) return msg
 
