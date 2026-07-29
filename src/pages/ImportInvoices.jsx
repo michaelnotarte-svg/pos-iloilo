@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { money } from '../lib/settings'
-import { fetchListNames, STORAGE_FALLBACK, SALE_TYPE_FALLBACK } from '../lib/lists'
+import { fetchListNames, STORAGE_FALLBACK, SALE_TYPE_FALLBACK, PAYMENT_FALLBACK } from '../lib/lists'
 import { useAuth } from '../lib/auth'
 import { friendlyError } from '../lib/friendlyError'
 import SearchSelect from '../components/SearchSelect'
@@ -31,6 +31,7 @@ export default function ImportInvoices() {
   const [storageOptions, setStorageOptions] = useState(STORAGE_FALLBACK)
   const [saleTypeOptions, setSaleTypeOptions] = useState(SALE_TYPE_FALLBACK)
   const [salesPersonOptions, setSalesPersonOptions] = useState([])
+  const [paymentOptions, setPaymentOptions] = useState(PAYMENT_FALLBACK)
 
   const [phase, setPhase] = useState('upload') // 'upload' | 'review'
   const [queue, setQueue] = useState([])       // receipt entries
@@ -77,13 +78,15 @@ export default function ImportInvoices() {
       fetchListNames('storage', STORAGE_FALLBACK, activeLocation),
       fetchListNames('sale_type', SALE_TYPE_FALLBACK, activeLocation),
       fetchListNames('sales_person', [], activeLocation),
-    ]).then(([{ data: it }, { data: cu }, st, sale, sp]) => {
+      fetchListNames('payment_method', PAYMENT_FALLBACK),
+    ]).then(([{ data: it }, { data: cu }, st, sale, sp, pay]) => {
       if (!ok) return
       setItems(it ?? [])
       setCustomers(cu ?? [])
       setStorageOptions(st)
       setSaleTypeOptions(sale)
       setSalesPersonOptions(sp)
+      setPaymentOptions(pay)
     })
     return () => { ok = false }
   }, [activeLocation])
@@ -116,6 +119,8 @@ export default function ImportInvoices() {
       storage: storageOptions.includes(DEFAULT_WH) ? DEFAULT_WH : '',
       sale_type: '',
       sales_person: '',
+      payment_status: 'Unpaid',
+      mode_of_payment: paymentOptions[0] || 'Cash',
       notes: '',
       lines: (parsed.lines || []).map((l) => ({
         item_id: (l.item_match && itemByName.get(l.item_match)) || '',
@@ -276,7 +281,7 @@ export default function ImportInvoices() {
       storage: f.storage,
       sale_type: f.sale_type,
       sales_person: f.sales_person || null,
-      status: 'Unpaid',
+      status: f.payment_status === 'Paid' ? 'Paid' : 'Unpaid',
       notes: f.notes?.trim() || null,
     }).select('id').single()
     if (e1) { setSaving(false); setSaveError(friendlyError(e1, { profile, module: 'Sales' })); return }
@@ -290,11 +295,29 @@ export default function ImportInvoices() {
       boxes: num(l.boxes),
       kilos: num(l.kilos),
     })))
+    if (e2) { setSaving(false); setSaveError(friendlyError(e2, { profile, module: 'Sales' })); return }
+
+    // Marked Paid → generate a payment line for the full invoice total.
+    let payWarn = ''
+    if (f.payment_status === 'Paid') {
+      const total = lines.reduce((s, l) => s + (num(l.kilos) || 0) * (num(l.unit_price) || 0), 0)
+      if (total > 0.01) {
+        const { error: e3 } = await supabase.from('partial_payments').insert({
+          invoice_id: inv.id,
+          amount_paid: Number(total.toFixed(2)),
+          date_paid: f.date || today(),
+          mode_of_payment: f.mode_of_payment,
+          remaining_balance: 0,
+          notes: 'Recorded on receipt import',
+        })
+        if (e3) payWarn = friendlyError(e3, { profile, module: 'Sales' })
+      }
+    }
     setSaving(false)
-    if (e2) { setSaveError(friendlyError(e2, { profile, module: 'Sales' })); return }
     await recordDrive(cur, 'saved', inv.id)
     patchEntry(idx, { status: 'saved', savedId: inv.id })
-    advance()
+    if (payWarn) setSaveError(`Invoice saved, but the payment line failed: ${payWarn}`)
+    else advance()
   }
 
   // ── Guards ──
@@ -467,6 +490,29 @@ export default function ImportInvoices() {
                 </select>
               </div>
             </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Lbl>Payment Status</Lbl>
+                <select value={cur.form.payment_status} onChange={(e) => updateForm({ payment_status: e.target.value })} className={inputCls}>
+                  <option>Unpaid</option>
+                  <option>Paid</option>
+                </select>
+              </div>
+              <div>
+                <Lbl>Mode of Payment</Lbl>
+                <select value={cur.form.mode_of_payment}
+                  onChange={(e) => updateForm({ mode_of_payment: e.target.value })}
+                  disabled={cur.form.payment_status !== 'Paid'} className={inputCls}>
+                  {paymentOptions.map((m) => <option key={m}>{m}</option>)}
+                </select>
+              </div>
+            </div>
+            {cur.form.payment_status === 'Paid' && (
+              <p className="text-[11px] text-gray-400 dark:text-gray-500 -mt-1">
+                A payment for the full invoice total will be recorded as {cur.form.mode_of_payment}.
+              </p>
+            )}
 
             {/* Lines */}
             <div className="flex items-center justify-between">
