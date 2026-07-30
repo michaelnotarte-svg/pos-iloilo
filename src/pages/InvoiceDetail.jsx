@@ -51,6 +51,9 @@ export default function InvoiceDetail() {
   const navigate = useNavigate()
   const { activeLocation, canWrite, profile } = useAuth()
   const canEdit = canWrite('Sales')
+  // Branches that don't maintain inventory (Bacolod) skip the on-hand/oversell
+  // guard and FIFO allocation — every sale would otherwise read as 0-on-hand.
+  const tracksStock = activeLocation !== 'Bacolod'
 
   const [inv, setInv] = useState(null)
   const [lines, setLines] = useState([])
@@ -90,7 +93,7 @@ export default function InvoiceDetail() {
 
   const [invMap, setInvMap] = useState(new Map())
   const [avgMap, setAvgMap] = useState({})
-  const [showAllItems, setShowAllItems] = useState(false)
+  const [showAllItems, setShowAllItems] = useState(!tracksStock) // Bacolod has no stock filter, show all
   const [oversell, setOversell] = useState(null) // { requested, available } | null
 
   useEffect(() => { fetchAll(); loadLists(); loadInventory() }, [id, activeLocation])
@@ -207,13 +210,16 @@ export default function InvoiceDetail() {
     }
     if (!lineStorage) { setLineError('Set the invoice warehouse first (Edit the header), or pick one for this line.'); return }
 
-    // Over-sell guard (against on-hand at the line's warehouse)
-    const avail = lookup(invMap, lineForm.item_id, lineStorage)
-    const reqKilos = Number(lineForm.kilos)
-    const reqBoxes = lineForm.boxes ? Number(lineForm.boxes) : 0
-    if (reqKilos > avail.kilos + 1e-9 || reqBoxes > avail.boxes + 1e-9) {
-      setOversell({ requested: { kilos: reqKilos, boxes: reqBoxes }, available: avail })
-      return
+    // Over-sell guard (against on-hand at the line's warehouse). Skipped where
+    // inventory isn't maintained (Bacolod) — else every sale forces an override.
+    if (tracksStock) {
+      const avail = lookup(invMap, lineForm.item_id, lineStorage)
+      const reqKilos = Number(lineForm.kilos)
+      const reqBoxes = lineForm.boxes ? Number(lineForm.boxes) : 0
+      if (reqKilos > avail.kilos + 1e-9 || reqBoxes > avail.boxes + 1e-9) {
+        setOversell({ requested: { kilos: reqKilos, boxes: reqBoxes }, available: avail })
+        return
+      }
     }
     doSaveLine(false)
   }
@@ -226,9 +232,14 @@ export default function InvoiceDetail() {
     const kilos = Number(lineForm.kilos)
     const boxes = lineForm.boxes ? Number(lineForm.boxes) : null
 
-    // FIFO-allocate across batches
-    const allocs = await allocateFIFO({ itemId: item_id, storage, kilos, boxes: boxes || 0, excludeLineId: editLineId, location: activeLocation })
-    const batchList = [...new Set(allocs.map((a) => a.batch_number))].join(', ')
+    // FIFO-allocate across batches — only where inventory is maintained. For
+    // Bacolod (no stock tracked) skip allocation and mark the batch manual.
+    let allocs = []
+    let batchList = 'MANUAL'
+    if (tracksStock) {
+      allocs = await allocateFIFO({ itemId: item_id, storage, kilos, boxes: boxes || 0, excludeLineId: editLineId, location: activeLocation })
+      batchList = [...new Set(allocs.map((a) => a.batch_number))].join(', ')
+    }
 
     const linePayload = {
       invoice_id: id, item_id, storage, batch_number: batchList,
@@ -247,14 +258,16 @@ export default function InvoiceDetail() {
     }
     if (err) { setSavingLine(false); setLineError(friendlyError(err, { profile, module: 'Sales' })); setOversell(null); return }
 
-    // Write the FIFO allocation rows
-    const allocRows = allocs.map((a) => ({
-      line_id: lineId, invoice_id: id, item_id, storage,
-      batch_number: a.batch_number, boxes: a.boxes, kilos: a.kilos, date: inv.date,
-    }))
-    await supabase.from('invoice_line_allocations').insert(allocRows)
+    // Write the FIFO allocation rows (none for non-stock branches)
+    if (tracksStock && allocs.length) {
+      const allocRows = allocs.map((a) => ({
+        line_id: lineId, invoice_id: id, item_id, storage,
+        batch_number: a.batch_number, boxes: a.boxes, kilos: a.kilos, date: inv.date,
+      }))
+      await supabase.from('invoice_line_allocations').insert(allocRows)
+    }
 
-    if (isOverride) {
+    if (isOverride && tracksStock) {
       const avail = lookup(invMap, item_id, storage)
       await supabase.from('oversell_overrides').insert({
         invoice_id: id, invoice_number: inv?.invoice_number ?? null,
@@ -608,7 +621,7 @@ export default function InvoiceDetail() {
                 options={itemsForDropdown.map((i) => ({ id: i.id, label: i.name }))}
                 placeholder="Type to search items…"
               />
-              {lineForm.item_id && (
+              {tracksStock && lineForm.item_id && (
                 <p className={`text-[11px] mt-1 ${lineAvail.kilos <= 0 ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
                   On hand @ {lineStorage || '—'}: <span className="font-semibold">{lineAvail.boxes.toLocaleString(undefined, { maximumFractionDigits: 2 })} box</span> · <span className="font-semibold">{lineAvail.kilos.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg</span>
                   {lineAvail.boxes > 0 && <> · avg {avgKgBox(lineAvail).toLocaleString(undefined, { maximumFractionDigits: 2 })} kg/box</>}
