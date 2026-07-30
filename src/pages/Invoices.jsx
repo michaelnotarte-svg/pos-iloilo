@@ -321,7 +321,17 @@ export default function Invoices() {
           )}
           {canEdit && (
           <button
-            onClick={() => { setForm(EMPTY_FORM); setError(''); setModalOpen(true) }}
+            onClick={() => {
+              // Seed branch-appropriate defaults (storage/sale_type are per-branch),
+              // so a Bacolod invoice doesn't default to an Iloilo warehouse.
+              setForm({
+                ...EMPTY_FORM,
+                storage: storageOptions[0] || '',
+                sale_type: saleTypeOptions.includes('Walk-in') ? 'Walk-in' : (saleTypeOptions[0] || ''),
+              })
+              setError('')
+              setModalOpen(true)
+            }}
             className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg"
           >
             + New Invoice
