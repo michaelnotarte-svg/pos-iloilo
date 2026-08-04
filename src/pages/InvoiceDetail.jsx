@@ -139,7 +139,7 @@ export default function InvoiceDetail() {
         supabase.from('invoices').select('*, customers(business_name, display_name, type)').eq('id', id).single(),
         supabase.from('invoice_lines').select('*, items(name)').eq('invoice_id', id).order('created_at'),
         supabase.from('partial_payments').select('*').eq('invoice_id', id).order('date_paid'),
-        supabase.from('customers').select('id, business_name, display_name').eq('location', activeLocation).order('business_name'),
+        supabase.from('customers').select('id, business_name, display_name, type').eq('location', activeLocation).order('business_name'),
         supabase.from('items').select('id, name').eq('location', activeLocation).order('name'),
       ])
     setInv(invData)
@@ -419,7 +419,13 @@ export default function InvoiceDetail() {
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Customer *</label>
+              <div className="flex items-center gap-2 mb-1">
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">Customer *</label>
+                {(() => {
+                  const t = customers.find((c) => c.id === headerForm.customer_id)?.type
+                  return t ? <TypeBadge type={t} /> : null
+                })()}
+              </div>
               <SearchSelect
                 value={headerForm.customer_id}
                 onChange={(id) => setHeaderForm({ ...headerForm, customer_id: id })}
@@ -474,7 +480,12 @@ export default function InvoiceDetail() {
         ) : (
           <div className="px-6 py-4 grid grid-cols-2 sm:grid-cols-6 gap-x-8 gap-y-3 text-sm">
             <InfoRow label="Date" value={inv.date} />
-            <InfoRow label="Customer" value={inv.customers ? (inv.customers.display_name || inv.customers.business_name) : 'Walk-in'} />
+            <InfoRow label="Customer" value={
+              <span className="inline-flex items-center gap-1.5">
+                {inv.customers ? (inv.customers.display_name || inv.customers.business_name) : 'Walk-in'}
+                {inv.customers?.type && <TypeBadge type={inv.customers.type} />}
+              </span>
+            } />
             <InfoRow label="Warehouse" value={inv.storage ?? '—'} />
             <InfoRow label="Sale Type" value={inv.sale_type} />
             <InfoRow label="Sales Person" value={inv.sales_person ?? '—'} />
@@ -775,6 +786,17 @@ export default function InvoiceDetail() {
 }
 
 // ── Shared small components ───────────────────────────────
+
+function TypeBadge({ type }) {
+  const isBN = type === 'BN'
+  return (
+    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${isBN
+      ? 'bg-purple-100 text-purple-700 dark:bg-purple-500/15 dark:text-purple-300'
+      : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>
+      {isBN ? 'BN' : 'Customer'}
+    </span>
+  )
+}
 
 function InfoRow({ label, value }) {
   return (
