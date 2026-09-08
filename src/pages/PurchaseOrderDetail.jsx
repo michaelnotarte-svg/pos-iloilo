@@ -342,12 +342,14 @@ export default function PurchaseOrderDetail() {
           <div className="px-6 py-4 grid grid-cols-2 sm:grid-cols-3 gap-x-8 gap-y-3 text-sm">
             <InfoRow label="Date" value={po.date} />
             {po.to_branch
-              ? <InfoRow label="Branch Transfer" value={`${po.from_storage ?? po.storage} → ${po.to_branch}`} />
+              ? <InfoRow label="Branch Transfer" value={po.transfer_direction === 'in'
+                  ? `${po.to_branch} → ${po.storage} (received)`
+                  : `${po.from_storage ?? po.storage} → ${po.to_branch} (sent)`} />
               : po.from_storage
-                ? <InfoRow label="Transfer" value={`${po.from_storage} → ${po.storage}`} />
+                ? <InfoRow label="Storage Transfer" value={`${po.from_storage} → ${po.storage}`} />
                 : <InfoRow label="Storage" value={po.storage} />}
-            {!po.from_storage && <InfoRow label="Source" value={po.source} />}
-            {!po.from_storage && <InfoRow label="Supplier" value={po.supplier} />}
+            {!po.from_storage && !po.to_branch && <InfoRow label="Source" value={po.source} />}
+            {!po.from_storage && !po.to_branch && <InfoRow label="Supplier" value={po.supplier} />}
             <InfoRow label="Category" value={po.category} />
             {po.notes && (
               <div className="col-span-2 sm:col-span-3">

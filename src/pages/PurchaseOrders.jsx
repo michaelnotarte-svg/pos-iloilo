@@ -6,8 +6,12 @@ import ManageListModal from '../components/ManageListModal'
 import { useAuth } from '../lib/auth'
 import { friendlyError } from '../lib/friendlyError'
 
-// Category that means "stock is leaving this branch for another branch"
+// Recognized stock-movement categories.
+//   Incoming        — external stock arriving (source + supplier → storage)
+//   Storage Transfer — movement between this branch's warehouses (from → to)
+//   Branch Transfer  — stock sent to / received from another branch (directional)
 const BRANCH_TRANSFER = 'Branch Transfer'
+const STORAGE_TRANSFER = 'Storage Transfer'
 
 const EMPTY_FORM = {
   po_number: '',
@@ -15,6 +19,7 @@ const EMPTY_FORM = {
   storage: 'Everest',
   from_storage: '',
   to_branch: '',
+  direction: 'out', // branch transfer: 'out' = we send, 'in' = we receive
   supplier: '',
   source: '',
   category: '',
@@ -112,7 +117,7 @@ export default function PurchaseOrders() {
 
   // KPIs over the filtered set
   const kpiCount = filtered.length
-  const kpiTransfers = filtered.filter((o) => o.category === 'Transfer' || o.from_storage).length
+  const kpiTransfers = filtered.filter((o) => o.category === STORAGE_TRANSFER || o.category === BRANCH_TRANSFER || o.from_storage || o.to_branch).length
   const kpiIncoming = kpiCount - kpiTransfers
   const kpiKilos = filtered.reduce((s, o) => s + o.totalKilos, 0)
   const kpiBoxes = filtered.reduce((s, o) => s + o.totalBoxes, 0)
@@ -144,6 +149,10 @@ export default function PurchaseOrders() {
       if (field === 'category' && value === BRANCH_TRANSFER && !next.to_branch) {
         next.to_branch = otherBranches[0] ?? ''
       }
+      // Switching branch-transfer direction: default the other branch if empty
+      if (field === 'direction' && next.category === BRANCH_TRANSFER && !next.to_branch) {
+        next.to_branch = otherBranches[0] ?? ''
+      }
       return next
     })
   }
@@ -151,28 +160,33 @@ export default function PurchaseOrders() {
   async function handleSave(e) {
     e.preventDefault()
     if (!form.date) { setError('Date is required.'); return }
-    const isTransfer = form.category === 'Transfer'
+    const isStorageTransfer = form.category === STORAGE_TRANSFER
     const isBranchTransfer = form.category === BRANCH_TRANSFER
-    if (isTransfer) {
-      if (!form.from_storage) { setError('From warehouse is required for a transfer.'); return }
+    const branchOut = isBranchTransfer && form.direction === 'out'
+    const branchIn = isBranchTransfer && form.direction === 'in'
+    if (isStorageTransfer) {
+      if (!form.from_storage) { setError('From warehouse is required for a storage transfer.'); return }
       if (form.from_storage === form.storage) { setError('From and To warehouses must be different.'); return }
     }
-    if (isBranchTransfer) {
-      if (!form.from_storage) { setError('Source warehouse is required for a branch transfer.'); return }
-      if (!form.to_branch) { setError('No other branch to transfer to.'); return }
-    }
+    if (branchOut && !form.from_storage) { setError('Source warehouse is required when sending to another branch.'); return }
+    if (branchIn && !form.storage) { setError('Destination warehouse is required when receiving from another branch.'); return }
+    if (isBranchTransfer && !form.to_branch) { setError('No other branch to transfer with.'); return }
     setSaving(true)
     setError('')
+    const isMove = isStorageTransfer || isBranchTransfer
     const payload = {
       po_number: form.po_number.trim() || null,
       location: activeLocation,
       date: form.date,
-      // A branch transfer only leaves a warehouse — source and line storage are the same
-      storage: isBranchTransfer ? form.from_storage : form.storage,
-      from_storage: isTransfer || isBranchTransfer ? form.from_storage : null,
+      // Outbound branch transfer leaves a warehouse (source == line storage); an
+      // inbound one lands in the destination warehouse; storage transfer lands in "to".
+      storage: branchOut ? form.from_storage : form.storage,
+      // from_storage marks a deducting move (storage transfer, or branch OUT).
+      from_storage: isStorageTransfer || branchOut ? form.from_storage : null,
       to_branch: isBranchTransfer ? form.to_branch : null,
-      supplier: isTransfer || isBranchTransfer ? null : (form.supplier.trim() || null),
-      source: isTransfer || isBranchTransfer ? null : (form.source.trim() || null),
+      transfer_direction: isBranchTransfer ? form.direction : null,
+      supplier: isMove ? null : (form.supplier.trim() || null),
+      source: isMove ? null : (form.source.trim() || null),
       category: form.category.trim() || null,
       notes: form.notes.trim() || null,
     }
@@ -333,7 +347,7 @@ export default function PurchaseOrders() {
                   <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{r.warehouse}</td>
                   <td className="px-4 py-3">
                     {cats.length
-                      ? cats.map((c) => <span key={c} className={`inline-block mr-1 px-2 py-0.5 rounded-full text-xs font-medium ${c === 'Transfer' ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300' : 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300'}`}>{c}</span>)
+                      ? cats.map((c) => <span key={c} className={`inline-block mr-1 px-2 py-0.5 rounded-full text-xs font-medium ${(c === STORAGE_TRANSFER || c === BRANCH_TRANSFER) ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300' : 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300'}`}>{c}</span>)
                       : <span className="text-gray-400 dark:text-gray-500">—</span>}
                   </td>
                   <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">{r.boxes > 0 ? r.boxes.toLocaleString() : '—'}</td>
@@ -379,8 +393,8 @@ export default function PurchaseOrders() {
             <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex items-center justify-between">
               <h2 className="font-semibold text-gray-800 dark:text-gray-100">
                 {form.category === BRANCH_TRANSFER
-                  ? `New Branch Transfer${form.to_branch ? ` → ${form.to_branch}` : ''}`
-                  : form.category === 'Transfer' ? 'New Stock Transfer' : 'New Stock Delivery'}
+                  ? `New Branch Transfer${form.to_branch ? ` ${form.direction === 'in' ? '←' : '→'} ${form.to_branch}` : ''}`
+                  : form.category === STORAGE_TRANSFER ? 'New Storage Transfer' : 'New Stock Delivery'}
               </h2>
               <button onClick={() => setModalOpen(false)} className="text-gray-400 dark:text-gray-500 hover:text-gray-600 text-xl leading-none">&times;</button>
             </div>
@@ -389,6 +403,19 @@ export default function PurchaseOrders() {
 
               {/* Category first — drives the rest of the form */}
               <ManagedSelect label="Category" value={form.category} onChange={(v) => set('category', v)} options={categoryOptions} onManage={() => setManageList('delivery_category')} />
+
+              {/* Branch transfer direction — decides whether stock is added or deducted here */}
+              {form.category === BRANCH_TRANSFER && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Direction</label>
+                  <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+                    {[['out', `Send out → deduct`], ['in', `Receive in → add`]].map(([v, label]) => (
+                      <button key={v} type="button" onClick={() => set('direction', v)}
+                        className={`px-3 py-2 text-sm font-medium ${form.direction === v ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/40'}`}>{label}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -402,7 +429,7 @@ export default function PurchaseOrders() {
                 </div>
                 {form.category === BRANCH_TRANSFER ? (
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">To Branch</label>
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">{form.direction === 'in' ? 'From Branch' : 'To Branch'}</label>
                     <select
                       value={form.to_branch}
                       onChange={(e) => set('to_branch', e.target.value)}
@@ -415,7 +442,7 @@ export default function PurchaseOrders() {
                 ) : (
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">{form.category === 'Transfer' ? 'To Warehouse *' : 'Storage *'}</label>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">{form.category === STORAGE_TRANSFER ? 'To Warehouse *' : 'Storage *'}</label>
                       <button type="button" onClick={() => setManageList('storage')} className="text-[11px] text-blue-600 hover:underline">Manage</button>
                     </div>
                     <select
@@ -429,25 +456,33 @@ export default function PurchaseOrders() {
                 )}
               </div>
 
-              {form.category === 'Transfer' || form.category === BRANCH_TRANSFER ? (
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">
-                    {form.category === BRANCH_TRANSFER ? 'Source Warehouse *' : 'From Warehouse *'}
-                  </label>
-                  <select
-                    value={form.from_storage}
-                    onChange={(e) => set('from_storage', e.target.value)}
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Select source warehouse…</option>
-                    {storageOptions.map((s) => <option key={s}>{s}</option>)}
-                  </select>
-                  <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">
-                    {form.category === BRANCH_TRANSFER
-                      ? `Stock will be deducted from this warehouse and sent to ${form.to_branch || 'the other branch'}. ${activeLocation} inventory only stocks out — the receiving branch records its own intake.`
-                      : 'Stock will be deducted from here and added to the destination warehouse.'}
-                  </p>
-                </div>
+              {form.category === STORAGE_TRANSFER || form.category === BRANCH_TRANSFER ? (
+                (() => {
+                  const branchIn = form.category === BRANCH_TRANSFER && form.direction === 'in'
+                  const label = branchIn ? 'Destination Warehouse *'
+                    : form.category === BRANCH_TRANSFER ? 'Source Warehouse *' : 'From Warehouse *'
+                  const field = branchIn ? 'storage' : 'from_storage'
+                  return (
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">{label}</label>
+                      <select
+                        value={form[field]}
+                        onChange={(e) => set(field, e.target.value)}
+                        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      >
+                        <option value="">Select warehouse…</option>
+                        {storageOptions.map((s) => <option key={s}>{s}</option>)}
+                      </select>
+                      <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">
+                        {branchIn
+                          ? `Stock received from ${form.to_branch || 'the other branch'} is added to this warehouse.`
+                          : form.category === BRANCH_TRANSFER
+                            ? `Stock is deducted from this warehouse and sent to ${form.to_branch || 'the other branch'}.`
+                            : 'Stock will be deducted from here and added to the destination warehouse.'}
+                      </p>
+                    </div>
+                  )
+                })()
               ) : (
                 <div className="grid grid-cols-2 gap-3">
                   <ManagedSelect label="Source" value={form.source} onChange={(v) => set('source', v)} options={sourceOptions} onManage={() => setManageList('source')} />
