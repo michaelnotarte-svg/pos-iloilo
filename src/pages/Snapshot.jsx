@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth'
 import { money } from '../lib/settings'
 import { downloadCSV } from '../lib/csv'
+import { DEFAULT_PRODUCT_LINE, uomForLine } from '../lib/lists'
 import ReportLetterhead from '../components/ReportLetterhead'
 
 const num = (x) => Number(x) || 0
@@ -58,6 +59,21 @@ export default function Snapshot() {
   const kilosSold = lines.reduce((s, { l }) => s + num(l.kilos), 0)
   const salesAmount = lines.reduce((s, { l }) => s + num(l.amount), 0)
   const invTotal = (inv) => (inv.invoice_lines ?? []).reduce((s, l) => s + num(l.amount), 0)
+
+  // Split sales by product line so a per-unit line (Chorizo) never folds silently
+  // into the kilo total. Each line keeps its own amount, quantity and breakout.
+  const plOf = (inv) => inv.product_line || DEFAULT_PRODUCT_LINE
+  const plGroups = Object.values(
+    lines.reduce((acc, { inv, l }) => {
+      const pl = plOf(inv)
+      if (!acc[pl]) acc[pl] = { pl, isUnit: uomForLine(pl) === 'unit', amount: 0, boxes: 0, qty: 0, invoices: new Set() }
+      const g = acc[pl]
+      g.amount += num(l.amount); g.boxes += num(l.boxes); g.qty += num(l.kilos); g.invoices.add(inv)
+      return acc
+    }, {})
+  ).map((g) => ({ ...g, invoices: [...g.invoices].sort((a, b) => (a.invoice_number > b.invoice_number ? 1 : -1)) }))
+    .sort((a, b) => a.isUnit - b.isUnit || b.amount - a.amount)
+  const multiLine = plGroups.length > 1
 
   const expenseTotal = expenses.reduce((s, e) => s + num(e.amount), 0)
 
@@ -148,9 +164,24 @@ export default function Snapshot() {
             {/* KPI subheaders */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
               <Card title="Sales" accent="blue">
-                <Stat label="Amount" value={money(salesAmount)} big />
-                <Stat label="Boxes sold" value={bxn(boxesSold)} />
-                <Stat label="Kilos sold" value={`${kg(kilosSold)} kg`} />
+                {multiLine ? (
+                  <>
+                    {plGroups.map((g) => (
+                      <div key={g.pl} className="border-b border-gray-100 dark:border-gray-700 last:border-0 pb-1.5 mb-1.5 last:pb-0 last:mb-0">
+                        <Stat label={g.pl} value={money(g.amount)} big />
+                        <Stat label={g.isUnit ? 'Units sold' : 'Kilos sold'} value={g.isUnit ? `${bxn(g.qty)} units` : `${kg(g.qty)} kg`} />
+                        {!g.isUnit && <Stat label="Boxes sold" value={bxn(g.boxes)} />}
+                      </div>
+                    ))}
+                    <Stat label="All lines" value={money(salesAmount)} />
+                  </>
+                ) : (
+                  <>
+                    <Stat label="Amount" value={money(salesAmount)} big />
+                    <Stat label="Boxes sold" value={bxn(boxesSold)} />
+                    <Stat label="Kilos sold" value={`${kg(kilosSold)} kg`} />
+                  </>
+                )}
               </Card>
               <Card title="Expenses" accent="red">
                 <Stat label="Total" value={money(expenseTotal)} big />
@@ -249,50 +280,59 @@ export default function Snapshot() {
             </div>
 
             {/* Sales breakout */}
-            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-2 mt-6">Sales Breakout</h3>
-            <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-300 text-xs">
-                  <tr>
-                    <th className="text-left px-3 py-2">OR no.</th>
-                    <th className="text-left px-3 py-2">Customer Name</th>
-                    <th className="text-left px-3 py-2">Item</th>
-                    <th className="text-right px-3 py-2">U.P.</th>
-                    <th className="text-right px-3 py-2">Boxes</th>
-                    <th className="text-right px-3 py-2">Kgs</th>
-                    <th className="text-right px-3 py-2">Amount</th>
-                    <th className="text-left px-3 py-2">MOP</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.length === 0 ? (
-                    <tr><td colSpan={8} className="text-center text-gray-400 dark:text-gray-500 py-8">No sales on this date.</td></tr>
-                  ) : invoices.map((inv) => (inv.invoice_lines ?? []).map((l, idx) => (
-                    <tr key={l.id} className={`${idx === 0 ? 'border-t-2 border-gray-200 dark:border-gray-700' : ''}`}>
-                      <td className="px-3 py-2 font-medium text-gray-700 dark:text-gray-200">{idx === 0 ? inv.invoice_number : ''}</td>
-                      <td className="px-3 py-2 text-gray-700 dark:text-gray-200">{idx === 0 ? custName(inv) : ''}</td>
-                      <td className="px-3 py-2 text-gray-800 dark:text-gray-100">{l.items?.name ?? '—'}</td>
-                      <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{bxn(l.unit_price)}</td>
-                      <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{bxn(l.boxes)} Boxes</td>
-                      <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{kg(l.kilos)} kgs</td>
-                      <td className="px-3 py-2 text-right font-medium text-gray-800 dark:text-gray-100">{money(l.amount)}</td>
-                      <td className="px-3 py-2 text-gray-600 dark:text-gray-300">{idx === 0 ? mopOf(inv) : ''}</td>
-                    </tr>
-                  )))}
-                </tbody>
-                {lines.length > 0 && (
-                  <tfoot className="bg-gray-50 dark:bg-gray-900 font-semibold text-gray-700 dark:text-gray-200 border-t-2 border-gray-200 dark:border-gray-700">
-                    <tr>
-                      <td colSpan={4} className="px-3 py-2 text-right text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Totals</td>
-                      <td className="px-3 py-2 text-right">{bxn(boxesSold)}</td>
-                      <td className="px-3 py-2 text-right">{kg(kilosSold)}</td>
-                      <td className="px-3 py-2 text-right">{money(salesAmount)}</td>
-                      <td></td>
-                    </tr>
-                  </tfoot>
-                )}
-              </table>
-            </div>
+            {lines.length === 0 ? (
+              <>
+                <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-2 mt-6">Sales Breakout</h3>
+                <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                  <table className="w-full text-sm">
+                    <tbody><tr><td className="text-center text-gray-400 dark:text-gray-500 py-8">No sales on this date.</td></tr></tbody>
+                  </table>
+                </div>
+              </>
+            ) : plGroups.map((g) => (
+              <div key={g.pl}>
+                <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-2 mt-6">Sales Breakout{multiLine ? ` — ${g.pl}` : ''}</h3>
+                <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-100 dark:bg-gray-900 text-gray-600 dark:text-gray-300 text-xs">
+                      <tr>
+                        <th className="text-left px-3 py-2">OR no.</th>
+                        <th className="text-left px-3 py-2">Customer Name</th>
+                        <th className="text-left px-3 py-2">Item</th>
+                        <th className="text-right px-3 py-2">U.P.</th>
+                        {!g.isUnit && <th className="text-right px-3 py-2">Boxes</th>}
+                        <th className="text-right px-3 py-2">{g.isUnit ? 'Units' : 'Kgs'}</th>
+                        <th className="text-right px-3 py-2">Amount</th>
+                        <th className="text-left px-3 py-2">MOP</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {g.invoices.map((inv) => (inv.invoice_lines ?? []).map((l, idx) => (
+                        <tr key={l.id} className={`${idx === 0 ? 'border-t-2 border-gray-200 dark:border-gray-700' : ''}`}>
+                          <td className="px-3 py-2 font-medium text-gray-700 dark:text-gray-200">{idx === 0 ? inv.invoice_number : ''}</td>
+                          <td className="px-3 py-2 text-gray-700 dark:text-gray-200">{idx === 0 ? custName(inv) : ''}</td>
+                          <td className="px-3 py-2 text-gray-800 dark:text-gray-100">{l.items?.name ?? '—'}</td>
+                          <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{bxn(l.unit_price)}</td>
+                          {!g.isUnit && <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{bxn(l.boxes)} Boxes</td>}
+                          <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{g.isUnit ? `${bxn(l.kilos)} units` : `${kg(l.kilos)} kgs`}</td>
+                          <td className="px-3 py-2 text-right font-medium text-gray-800 dark:text-gray-100">{money(l.amount)}</td>
+                          <td className="px-3 py-2 text-gray-600 dark:text-gray-300">{idx === 0 ? mopOf(inv) : ''}</td>
+                        </tr>
+                      )))}
+                    </tbody>
+                    <tfoot className="bg-gray-50 dark:bg-gray-900 font-semibold text-gray-700 dark:text-gray-200 border-t-2 border-gray-200 dark:border-gray-700">
+                      <tr>
+                        <td colSpan={4} className="px-3 py-2 text-right text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Totals</td>
+                        {!g.isUnit && <td className="px-3 py-2 text-right">{bxn(g.boxes)}</td>}
+                        <td className="px-3 py-2 text-right">{g.isUnit ? `${bxn(g.qty)}` : kg(g.qty)}</td>
+                        <td className="px-3 py-2 text-right">{money(g.amount)}</td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            ))}
           </>
         )}
       </div>

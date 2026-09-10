@@ -21,3 +21,13 @@ export async function fetchListNames(listType, fallback = [], location = null) {
 export const STORAGE_FALLBACK = ['Everest', 'FishingPort']
 export const PAYMENT_FALLBACK = ['Cash', 'A.R.', 'Check', 'Bank Transfer', 'Bank Deposit', 'GCash']
 export const SALE_TYPE_FALLBACK = ['Walk-in', 'Delivery', 'Out-of-Town']
+
+// Product lines (see migration 0027). Meat = boxed meat sold by kilo (default);
+// Chorizo = sold per unit.
+export const PRODUCT_LINE_FALLBACK = ['Meat', 'Chorizo']
+export const DEFAULT_PRODUCT_LINE = 'Meat'
+// Unit-of-measure a product line sells in. Unit-sold lines are listed here; every
+// other line defaults to kilos. (sell_by is also stored per item; this only seeds
+// the default when picking a line in the item form.)
+const UNIT_SOLD_LINES = new Set(['Chorizo'])
+export const uomForLine = (line) => (UNIT_SOLD_LINES.has(line) ? 'unit' : 'kg')

@@ -62,6 +62,7 @@ export default function Inventory() {
   // Ledger filters
   const [fStorage, setFStorage] = useState('All')
   const [fItem, setFItem] = useState('')
+  const [fLine, setFLine] = useState('All') // product line
   const [lFrom, setLFrom] = useState('')
   const [lTo, setLTo] = useState('')
   const [lPage, setLPage] = useState(1)
@@ -117,10 +118,14 @@ export default function Inventory() {
     ...[...new Set(moves.map((m) => m.storage))].filter((s) => s && !storageOptions.includes(s)),
   ]
 
-  // Shared filters (warehouse + item) applied to snapshot, depleted, and ledger
+  // Product lines present in the movements (e.g. Meat, Chorizo)
+  const lineChoices = [...new Set(moves.map((m) => m.product_line || 'Meat'))].sort()
+
+  // Shared filters (warehouse + item + product line) applied to snapshot, depleted, and ledger
   const fmoves = moves
     .filter((m) => fStorage === 'All' || m.storage === fStorage)
     .filter((m) => !fItem || m.item.toLowerCase().includes(fItem.toLowerCase()))
+    .filter((m) => fLine === 'All' || (m.product_line || 'Meat') === fLine)
 
   // Movements up to the "as of" date
   const upto = fmoves.filter((m) => m.date <= asOf)
@@ -376,6 +381,16 @@ export default function Inventory() {
           <option value="All">All Warehouses</option>
           {storages.map((s) => <option key={s}>{s}</option>)}
         </select>
+        {lineChoices.length > 1 && (
+          <select
+            value={fLine}
+            onChange={(e) => { setFLine(e.target.value); setLPage(1) }}
+            className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="All">All Lines</option>
+            {lineChoices.map((l) => <option key={l}>{l}</option>)}
+          </select>
+        )}
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value)}
@@ -385,8 +400,8 @@ export default function Inventory() {
           <option value="kilos">Sort: Kilos</option>
           <option value="boxes">Sort: Boxes</option>
         </select>
-        {(fItem || fStorage !== 'All' || lFrom || lTo) && (
-          <button onClick={() => { setFItem(''); setFStorage('All'); setLFrom(''); setLTo(''); setLPage(1) }} className="text-xs text-blue-600 hover:underline self-center">Reset filters</button>
+        {(fItem || fStorage !== 'All' || fLine !== 'All' || lFrom || lTo) && (
+          <button onClick={() => { setFItem(''); setFStorage('All'); setFLine('All'); setLFrom(''); setLTo(''); setLPage(1) }} className="text-xs text-blue-600 hover:underline self-center">Reset filters</button>
         )}
       </div>
 

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { money } from '../lib/settings'
-import { fetchListNames, STORAGE_FALLBACK, PAYMENT_FALLBACK, SALE_TYPE_FALLBACK } from '../lib/lists'
+import { fetchListNames, STORAGE_FALLBACK, PAYMENT_FALLBACK, SALE_TYPE_FALLBACK, DEFAULT_PRODUCT_LINE, uomForLine } from '../lib/lists'
 import ManageListModal from '../components/ManageListModal'
 import { fetchMovements, onHandMap, lookup, inStockItemIds, avgKgBox, itemAvgMap, allocateFIFO } from '../lib/inventory'
 import { useAuth } from '../lib/auth'
@@ -114,10 +114,17 @@ export default function InvoiceDetail() {
   const invStorage = inv?.storage || ''
   const lineStorage = lineForm.storage || invStorage // per-line override, defaults to the invoice's warehouse
   const isBN = inv?.customers?.type === 'BN'
+  // Product line of this invoice drives the item picker + how quantity is handled.
+  const invLine = inv?.product_line || DEFAULT_PRODUCT_LINE
+  const isUnit = uomForLine(invLine) === 'unit'   // Chorizo etc. — sold per unit
+  const fifoStock = tracksStock && !isUnit         // Iloilo Meat: FIFO + oversell guard
+  const countStock = isUnit                        // simple count: one mirror allocation, no FIFO
+  const qtyLabel = isUnit ? 'Units' : 'Kilos'
   const lineAvail = lookup(invMap, lineForm.item_id, lineStorage)
   const inStock = inStockItemIds(invMap, lineStorage)
   const itemsForDropdown = items.filter(
-    (i) => showAllItems || inStock.has(i.id) || i.id === lineForm.item_id
+    (i) => (i.product_line || DEFAULT_PRODUCT_LINE) === invLine &&
+      (showAllItems || inStock.has(i.id) || i.id === lineForm.item_id)
   )
 
   // Health check: this line's kg/box vs the "normal" kg/box. Prefer the actual
@@ -140,7 +147,7 @@ export default function InvoiceDetail() {
         supabase.from('invoice_lines').select('*, items(name)').eq('invoice_id', id).order('created_at'),
         supabase.from('partial_payments').select('*').eq('invoice_id', id).order('date_paid'),
         supabase.from('customers').select('id, business_name, display_name, type').eq('location', activeLocation).order('business_name'),
-        supabase.from('items').select('id, name').eq('location', activeLocation).order('name'),
+        supabase.from('items').select('id, name, product_line, sell_by').eq('location', activeLocation).order('name'),
       ])
     setInv(invData)
     setHeaderForm({
@@ -202,17 +209,17 @@ export default function InvoiceDetail() {
   function saveLine(e) {
     e.preventDefault()
     if (!lineForm.item_id) { setLineError('Select an item.'); return }
-    if (!lineForm.kilos || Number(lineForm.kilos) <= 0) { setLineError('Kilos is required.'); return }
-    if (isBN) {
+    if (!lineForm.kilos || Number(lineForm.kilos) <= 0) { setLineError(`${qtyLabel} is required.`); return }
+    if (isBN && !isUnit) {
       if (!lineForm.boxes) { setLineError('Boxes is required for BN entries.'); return }
     } else if (!lineForm.unit_price) {
       setLineError('Unit price is required.'); return
     }
     if (!lineStorage) { setLineError('Set the invoice warehouse first (Edit the header), or pick one for this line.'); return }
 
-    // Over-sell guard (against on-hand at the line's warehouse). Skipped where
-    // inventory isn't maintained (Bacolod) — else every sale forces an override.
-    if (tracksStock) {
+    // Over-sell guard (against on-hand at the line's warehouse). FIFO lines only;
+    // unit lines use a simple count with no override popup.
+    if (fifoStock) {
       const avail = lookup(invMap, lineForm.item_id, lineStorage)
       const reqKilos = Number(lineForm.kilos)
       const reqBoxes = lineForm.boxes ? Number(lineForm.boxes) : 0
@@ -232,13 +239,17 @@ export default function InvoiceDetail() {
     const kilos = Number(lineForm.kilos)
     const boxes = lineForm.boxes ? Number(lineForm.boxes) : null
 
-    // FIFO-allocate across batches — only where inventory is maintained. For
-    // Bacolod (no stock tracked) skip allocation and mark the batch manual.
+    // FIFO-allocate across batches — only where kilo inventory is maintained.
+    // Unit lines get ONE mirror allocation (simple count, no FIFO). Bacolod meat
+    // (no stock tracked) skips allocation and marks the batch manual.
     let allocs = []
     let batchList = 'MANUAL'
-    if (tracksStock) {
+    if (fifoStock) {
       allocs = await allocateFIFO({ itemId: item_id, storage, kilos, boxes: boxes || 0, excludeLineId: editLineId, location: activeLocation })
       batchList = [...new Set(allocs.map((a) => a.batch_number))].join(', ')
+    } else if (countStock) {
+      batchList = 'UNIT'
+      allocs = [{ batch_number: 'UNIT', boxes: boxes || 0, kilos }]
     }
 
     const linePayload = {
@@ -258,8 +269,8 @@ export default function InvoiceDetail() {
     }
     if (err) { setSavingLine(false); setLineError(friendlyError(err, { profile, module: 'Sales' })); setOversell(null); return }
 
-    // Write the FIFO allocation rows (none for non-stock branches)
-    if (tracksStock && allocs.length) {
+    // Write the allocation rows (FIFO batches, or the single unit mirror)
+    if ((fifoStock || countStock) && allocs.length) {
       const allocRows = allocs.map((a) => ({
         line_id: lineId, invoice_id: id, item_id, storage,
         batch_number: a.batch_number, boxes: a.boxes, kilos: a.kilos, date: inv.date,
@@ -267,7 +278,7 @@ export default function InvoiceDetail() {
       await supabase.from('invoice_line_allocations').insert(allocRows)
     }
 
-    if (isOverride && tracksStock) {
+    if (isOverride && fifoStock) {
       const avail = lookup(invMap, item_id, storage)
       await supabase.from('oversell_overrides').insert({
         invoice_id: id, invoice_number: inv?.invoice_number ?? null,
@@ -523,7 +534,7 @@ export default function InvoiceDetail() {
                   <th className="text-left px-4 py-3">Item</th>
                   <th className="text-left px-4 py-3">Batch(es)</th>
                   <th className="text-right px-4 py-3">Boxes</th>
-                  <th className="text-right px-4 py-3">Kilos</th>
+                  <th className="text-right px-4 py-3">{qtyLabel}</th>
                   <th className="text-right px-4 py-3">Unit Price</th>
                   <th className="text-right px-4 py-3">Amount</th>
                   <th className="px-4 py-3"></th>
@@ -632,10 +643,15 @@ export default function InvoiceDetail() {
                 options={itemsForDropdown.map((i) => ({ id: i.id, label: i.name }))}
                 placeholder="Type to search items…"
               />
-              {tracksStock && lineForm.item_id && (
+              {fifoStock && lineForm.item_id && (
                 <p className={`text-[11px] mt-1 ${lineAvail.kilos <= 0 ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
                   On hand @ {lineStorage || '—'}: <span className="font-semibold">{lineAvail.boxes.toLocaleString(undefined, { maximumFractionDigits: 2 })} box</span> · <span className="font-semibold">{lineAvail.kilos.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg</span>
                   {lineAvail.boxes > 0 && <> · avg {avgKgBox(lineAvail).toLocaleString(undefined, { maximumFractionDigits: 2 })} kg/box</>}
+                </p>
+              )}
+              {countStock && lineForm.item_id && (
+                <p className={`text-[11px] mt-1 ${lineAvail.kilos <= 0 ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
+                  On hand @ {lineStorage || '—'}: <span className="font-semibold">{lineAvail.kilos.toLocaleString(undefined, { maximumFractionDigits: 0 })} units</span>
                 </p>
               )}
             </div>
@@ -647,10 +663,10 @@ export default function InvoiceDetail() {
               </select>
               <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1">Defaults to the invoice's warehouse ({invStorage || '—'}); override to draw this item from a different one.</p>
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              <F label="Boxes" value={lineForm.boxes} onChange={(v) => setLineForm({ ...lineForm, boxes: v })} type="number" />
-              <F label="Kilos *" value={lineForm.kilos} onChange={(v) => setLineForm({ ...lineForm, kilos: v })} type="number" />
-              <F label={isBN ? "Unit Price" : "Unit Price *"} value={lineForm.unit_price} onChange={(v) => setLineForm({ ...lineForm, unit_price: v })} type="number" />
+            <div className={`grid ${isUnit ? 'grid-cols-2' : 'grid-cols-3'} gap-3`}>
+              {!isUnit && <F label="Boxes" value={lineForm.boxes} onChange={(v) => setLineForm({ ...lineForm, boxes: v })} type="number" />}
+              <F label={`${qtyLabel} *`} value={lineForm.kilos} onChange={(v) => setLineForm({ ...lineForm, kilos: v })} type="number" />
+              <F label={isBN && !isUnit ? "Unit Price" : "Unit Price *"} value={lineForm.unit_price} onChange={(v) => setLineForm({ ...lineForm, unit_price: v })} type="number" />
             </div>
 
             {/* kg/box auto-compute + health block */}

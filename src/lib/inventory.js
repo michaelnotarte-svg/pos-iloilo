@@ -13,23 +13,23 @@ export async function fetchMovements(location = null, opts = {}) {
   const byItem = (q) => (itemId ? q.eq('item_id', itemId) : q)
 
   const archB = () => {
-    let q = supabase.from('inventory_archive').select('snapshot_date, item_id, batch_number, storage, boxes, kilos, items(name)')
+    let q = supabase.from('inventory_archive').select('snapshot_date, item_id, batch_number, storage, boxes, kilos, items(name, product_line)')
     if (location) q = q.eq('location', location)
     return byItem(q)
   }
   const stockB = () => {
-    let q = supabase.from('stock_entries').select('date, item_id, batch_number, storage, boxes, kilos, items(name), purchase_orders!inner(from_storage, to_branch, location)')
+    let q = supabase.from('stock_entries').select('date, item_id, batch_number, storage, boxes, kilos, items(name, product_line), purchase_orders!inner(from_storage, to_branch, location)')
     if (location) q = q.eq('purchase_orders.location', location)
     return byItem(q)
   }
   // Sales come from FIFO batch allocations (per batch), not the raw line
   const salesB = () => {
-    let q = supabase.from('invoice_line_allocations').select('date, item_id, batch_number, storage, boxes, kilos, items(name), invoices!inner(location)')
+    let q = supabase.from('invoice_line_allocations').select('date, item_id, batch_number, storage, boxes, kilos, items(name, product_line), invoices!inner(location)')
     if (location) q = q.eq('invoices.location', location)
     return byItem(q)
   }
   const adjB = () => {
-    let q = supabase.from('inventory_adjustments').select('date, item_id, batch_number, storage, boxes, kilos, items(name)')
+    let q = supabase.from('inventory_adjustments').select('date, item_id, batch_number, storage, boxes, kilos, items(name, product_line)')
     if (location) q = q.eq('location', location)
     return byItem(q)
   }
@@ -40,12 +40,12 @@ export async function fetchMovements(location = null, opts = {}) {
 
   const m = []
   for (const r of arch ?? [])
-    m.push({ date: r.snapshot_date, item_id: r.item_id, item: r.items?.name ?? '—', batch: r.batch_number ?? '—', storage: r.storage, boxes: num(r.boxes), kilos: num(r.kilos), type: 'Opening' })
+    m.push({ date: r.snapshot_date, item_id: r.item_id, item: r.items?.name ?? '—', product_line: r.items?.product_line ?? null, batch: r.batch_number ?? '—', storage: r.storage, boxes: num(r.boxes), kilos: num(r.kilos), type: 'Opening' })
 
   for (const r of stock ?? []) {
     const from = r.purchase_orders?.from_storage
     const toBranch = r.purchase_orders?.to_branch
-    const base = { date: r.date, item_id: r.item_id, item: r.items?.name ?? '—', batch: r.batch_number ?? '—' }
+    const base = { date: r.date, item_id: r.item_id, item: r.items?.name ?? '—', product_line: r.items?.product_line ?? null, batch: r.batch_number ?? '—' }
     if (toBranch) {
       // Branch transfer: stock leaves this branch entirely — deduct only, no
       // matching "in" (the receiving branch records its own intake).
@@ -60,10 +60,10 @@ export async function fetchMovements(location = null, opts = {}) {
   }
 
   for (const r of sales ?? [])
-    m.push({ date: r.date, item_id: r.item_id, item: r.items?.name ?? '—', batch: r.batch_number ?? '—', storage: r.storage, boxes: -num(r.boxes), kilos: -num(r.kilos), type: 'Sale' })
+    m.push({ date: r.date, item_id: r.item_id, item: r.items?.name ?? '—', product_line: r.items?.product_line ?? null, batch: r.batch_number ?? '—', storage: r.storage, boxes: -num(r.boxes), kilos: -num(r.kilos), type: 'Sale' })
 
   for (const r of adj ?? [])
-    m.push({ date: r.date, item_id: r.item_id, item: r.items?.name ?? '—', batch: r.batch_number ?? '—', storage: r.storage, boxes: num(r.boxes), kilos: num(r.kilos), type: 'Adjustment' })
+    m.push({ date: r.date, item_id: r.item_id, item: r.items?.name ?? '—', product_line: r.items?.product_line ?? null, batch: r.batch_number ?? '—', storage: r.storage, boxes: num(r.boxes), kilos: num(r.kilos), type: 'Adjustment' })
 
   return m.filter((x) => x.date)
 }

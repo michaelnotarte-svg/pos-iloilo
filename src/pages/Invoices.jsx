@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase, selectAll } from '../lib/supabase'
 import { money } from '../lib/settings'
-import { fetchListNames, PAYMENT_FALLBACK, STORAGE_FALLBACK, SALE_TYPE_FALLBACK } from '../lib/lists'
+import { fetchListNames, PAYMENT_FALLBACK, STORAGE_FALLBACK, SALE_TYPE_FALLBACK, PRODUCT_LINE_FALLBACK, DEFAULT_PRODUCT_LINE } from '../lib/lists'
 import ManageListModal from '../components/ManageListModal'
 import ManageCustomersModal from '../components/ManageCustomersModal'
 import ReportLetterhead from '../components/ReportLetterhead'
@@ -25,6 +25,7 @@ const LIST_TITLES = {
   storage: 'Manage Storage Locations',
   sale_type: 'Manage Sale Types',
   sales_person: 'Manage Sales People',
+  product_line: 'Manage Product Lines',
 }
 
 const STATUS_STYLE = {
@@ -40,6 +41,7 @@ const EMPTY_FORM = {
   storage: 'Everest',
   sale_type: 'Walk-in',
   sales_person: '',
+  product_line: DEFAULT_PRODUCT_LINE,
   notes: '',
 }
 
@@ -66,8 +68,9 @@ export default function Invoices() {
   const [custType, setCustType] = useState('Customer') // new-invoice filter
   const [typeView, setTypeView] = useState(saved.typeView ?? 'Both') // list filter
   const [saleTypeFilter, setSaleTypeFilter] = useState(saved.saleTypeFilter ?? 'All')
-  const anyFilter = !!search || statusFilter !== 'All' || !!dateFrom || !!dateTo || typeView !== 'Both' || saleTypeFilter !== 'All'
-  function resetFilters() { setSearch(''); setStatusFilter('All'); setDateFrom(''); setDateTo(''); setTypeView('Both'); setSaleTypeFilter('All') }
+  const [lineFilter, setLineFilter] = useState(saved.lineFilter ?? 'All') // product line
+  const anyFilter = !!search || statusFilter !== 'All' || !!dateFrom || !!dateTo || typeView !== 'Both' || saleTypeFilter !== 'All' || lineFilter !== 'All'
+  function resetFilters() { setSearch(''); setStatusFilter('All'); setDateFrom(''); setDateTo(''); setTypeView('Both'); setSaleTypeFilter('All'); setLineFilter('All') }
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
@@ -76,6 +79,7 @@ export default function Invoices() {
   const [storageOptions, setStorageOptions] = useState(STORAGE_FALLBACK)
   const [saleTypeOptions, setSaleTypeOptions] = useState(SALE_TYPE_FALLBACK)
   const [salesPersonOptions, setSalesPersonOptions] = useState([])
+  const [lineOptions, setLineOptions] = useState(PRODUCT_LINE_FALLBACK)
   const [manageList, setManageList] = useState(null) // 'payment_method' | 'storage' | 'sale_type' | 'sales_person'
   const [manageCustomers, setManageCustomers] = useState(false)
 
@@ -90,20 +94,21 @@ export default function Invoices() {
   useEffect(() => {
     if (firstRun.current) { firstRun.current = false; return }
     setPage(1)
-  }, [search, statusFilter, typeView, saleTypeFilter, dateFrom, dateTo, viewMode, loadAll])
+  }, [search, statusFilter, typeView, saleTypeFilter, lineFilter, dateFrom, dateTo, viewMode, loadAll])
 
   // Remember the filters for this session
   useEffect(() => {
     sessionStorage.setItem(FILTERS_KEY, JSON.stringify({
-      search, statusFilter, typeView, saleTypeFilter, dateFrom, dateTo, viewMode, loadAll, page,
+      search, statusFilter, typeView, saleTypeFilter, lineFilter, dateFrom, dateTo, viewMode, loadAll, page,
     }))
-  }, [search, statusFilter, typeView, saleTypeFilter, dateFrom, dateTo, viewMode, loadAll, page])
+  }, [search, statusFilter, typeView, saleTypeFilter, lineFilter, dateFrom, dateTo, viewMode, loadAll, page])
 
   async function loadLists() {
     setPaymentOptions(await fetchListNames('payment_method', PAYMENT_FALLBACK))
     setStorageOptions(await fetchListNames('storage', STORAGE_FALLBACK, activeLocation))
     setSaleTypeOptions(await fetchListNames('sale_type', SALE_TYPE_FALLBACK, activeLocation))
     setSalesPersonOptions(await fetchListNames('sales_person', [], activeLocation))
+    setLineOptions(await fetchListNames('product_line', PRODUCT_LINE_FALLBACK))
   }
 
   async function loadCustomers() {
@@ -154,7 +159,8 @@ export default function Invoices() {
     const matchDate = (!dateFrom || inv.date >= dateFrom) && (!dateTo || inv.date <= dateTo)
     const matchType = typeView === 'Both' || (inv.customers?.type ?? 'Customer') === typeView
     const matchSaleType = saleTypeFilter === 'All' || inv.sale_type === saleTypeFilter
-    return matchSearch && matchStatus && matchDate && matchType && matchSaleType
+    const matchLine = lineFilter === 'All' || (inv.product_line || DEFAULT_PRODUCT_LINE) === lineFilter
+    return matchSearch && matchStatus && matchDate && matchType && matchSaleType && matchLine
   })
 
   // KPIs over the filtered set — outstanding = Unpaid + Partial balances
@@ -271,6 +277,7 @@ export default function Invoices() {
       storage: form.storage,
       sale_type: form.sale_type,
       sales_person: form.sales_person || null,
+      product_line: form.product_line || DEFAULT_PRODUCT_LINE,
       status: 'Unpaid',
       notes: form.notes?.trim() || null,
     }
@@ -387,6 +394,12 @@ export default function Invoices() {
           <option value="All">All Sale Types</option>
           {saleTypeOptions.map((s) => <option key={s}>{s}</option>)}
         </select>
+        {lineOptions.length > 1 && (
+          <select value={lineFilter} onChange={(e) => setLineFilter(e.target.value)} className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="All">All Lines</option>
+            {lineOptions.map((l) => <option key={l}>{l}</option>)}
+          </select>
+        )}
         <div className="flex items-center gap-1">
           <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className="border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           <span className="text-gray-400 text-xs">→</span>
@@ -565,6 +578,22 @@ export default function Invoices() {
             </div>
             <form onSubmit={handleSave} className="px-6 py-4 space-y-3">
               {error && <p className="text-red-500 text-xs">{error}</p>}
+
+              {/* Product line — stamps the whole invoice (receipts never mix lines)
+                  and, in the detail screen, limits the item picker to this line. */}
+              {lineOptions.length > 1 && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">Product Line</label>
+                    <button type="button" onClick={() => setManageList('product_line')} className="text-[11px] text-blue-600 hover:underline">Manage</button>
+                  </div>
+                  <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden flex-wrap">
+                    {lineOptions.map((l) => (
+                      <button type="button" key={l} onClick={() => set('product_line', l)} className={`px-4 py-1.5 text-sm font-medium ${form.product_line === l ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/40'}`}>{l}</button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Customer type — promoted to top; switches the dropdown below */}
               <div>

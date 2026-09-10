@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { fetchListNames } from '../lib/lists'
+import { fetchListNames, PRODUCT_LINE_FALLBACK, DEFAULT_PRODUCT_LINE, uomForLine } from '../lib/lists'
 import ManageListModal from '../components/ManageListModal'
 import { useAuth } from '../lib/auth'
 import { friendlyError } from '../lib/friendlyError'
 
-const EMPTY_FORM = { base_name: '', brand: '', category: '' }
+const EMPTY_FORM = { base_name: '', brand: '', category: '', product_line: DEFAULT_PRODUCT_LINE, sell_by: 'kg' }
 
 function buildName(base, brand) {
   const b = base.trim()
@@ -28,6 +28,8 @@ export default function Items() {
   const [categoryOptions, setCategoryOptions] = useState([])
   const [baseOptions, setBaseOptions] = useState([])
   const [brandOptions, setBrandOptions] = useState([])
+  const [lineOptions, setLineOptions] = useState(PRODUCT_LINE_FALLBACK)
+  const [lineFilter, setLineFilter] = useState('All')
   const [manageList, setManageList] = useState(null)
 
   useEffect(() => { fetchItems(); loadCategories() }, [activeLocation])
@@ -36,6 +38,7 @@ export default function Items() {
     setCategoryOptions(await fetchListNames('item_category', []))
     setBaseOptions(await fetchListNames('item_base', []))
     setBrandOptions(await fetchListNames('brand', []))
+    setLineOptions(await fetchListNames('product_line', PRODUCT_LINE_FALLBACK))
   }
 
   async function fetchItems() {
@@ -47,11 +50,14 @@ export default function Items() {
 
   const filtered = items.filter((i) => {
     const q = search.toLowerCase()
-    return (
+    const textOK = (
       i.name?.toLowerCase().includes(q) ||
       i.brand?.toLowerCase().includes(q) ||
       i.category?.toLowerCase().includes(q)
     )
+    const line = i.product_line || DEFAULT_PRODUCT_LINE
+    const lineOK = lineFilter === 'All' || line === lineFilter
+    return textOK && lineOK
   })
 
   function openAdd() {
@@ -66,6 +72,8 @@ export default function Items() {
       base_name: item.base_name ?? item.name ?? '',
       brand: item.brand ?? '',
       category: item.category ?? '',
+      product_line: item.product_line || DEFAULT_PRODUCT_LINE,
+      sell_by: item.sell_by || 'kg',
     })
     setEditId(item.id)
     setError('')
@@ -82,6 +90,8 @@ export default function Items() {
       base_name: form.base_name.trim(),
       brand: form.brand.trim() || null,
       category: form.category.trim() || null,
+      product_line: form.product_line || DEFAULT_PRODUCT_LINE,
+      sell_by: form.sell_by || 'kg',
       location: activeLocation,
     }
     let err
@@ -114,13 +124,19 @@ export default function Items() {
         )}
       </div>
 
-      <input
-        type="text"
-        placeholder="Search by name or category…"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
-      />
+      <div className="flex flex-wrap gap-2 mb-4">
+        <input
+          type="text"
+          placeholder="Search by name or category…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="flex-1 min-w-44 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <select value={lineFilter} onChange={(e) => setLineFilter(e.target.value)} className="border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+          <option value="All">All Lines</option>
+          {lineOptions.map((l) => <option key={l}>{l}</option>)}
+        </select>
+      </div>
 
       {loading ? (
         <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-12">Loading…</p>
@@ -132,6 +148,7 @@ export default function Items() {
             <thead className="bg-gray-50 dark:bg-gray-900 text-gray-500 dark:text-gray-400 uppercase text-xs">
               <tr>
                 <th className="text-left px-4 py-3">Name</th>
+                <th className="text-left px-4 py-3">Line</th>
                 <th className="text-left px-4 py-3">Brand</th>
                 <th className="text-left px-4 py-3">Category</th>
                 <th className="px-4 py-3"></th>
@@ -141,6 +158,11 @@ export default function Items() {
               {filtered.map((item) => (
                 <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/40">
                   <td className="px-4 py-3 font-medium text-gray-800 dark:text-gray-100">{item.name}</td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${(item.sell_by === 'unit') ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300'}`}>
+                      {item.product_line || DEFAULT_PRODUCT_LINE}{item.sell_by === 'unit' ? ' · unit' : ''}
+                    </span>
+                  </td>
                   <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{item.brand ?? '—'}</td>
                   <td className="px-4 py-3 text-gray-600 dark:text-gray-300">{item.category ?? '—'}</td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
@@ -170,6 +192,24 @@ export default function Items() {
                   Saved as: <span className="font-semibold text-gray-700 dark:text-gray-200">{buildName(form.base_name, form.brand)}</span>
                 </p>
               )}
+              {/* Product line drives its own item list, inventory view and totals;
+                  picking a line seeds its unit of measure. */}
+              <ManagedSelect
+                label="Product Line *"
+                value={form.product_line}
+                onChange={(v) => setForm({ ...form, product_line: v, sell_by: uomForLine(v) })}
+                options={lineOptions}
+                onManage={() => setManageList('product_line')}
+              />
+              <div>
+                <label className="block text-xs font-medium text-gray-600 dark:text-gray-300 mb-1">Sold by</label>
+                <div className="inline-flex rounded-lg border border-gray-300 dark:border-gray-600 overflow-hidden">
+                  {[['kg', 'Kilos'], ['unit', 'Units']].map(([v, label]) => (
+                    <button key={v} type="button" onClick={() => setForm({ ...form, sell_by: v })}
+                      className={`px-3 py-2 text-sm font-medium ${form.sell_by === v ? 'bg-blue-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/40'}`}>{label}</button>
+                  ))}
+                </div>
+              </div>
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <label className="block text-xs font-medium text-gray-600 dark:text-gray-300">Category</label>
@@ -227,6 +267,7 @@ const ITEM_LIST_TITLES = {
   item_base: 'Manage Item Names',
   brand: 'Manage Brands',
   item_category: 'Manage Item Categories',
+  product_line: 'Manage Product Lines',
 }
 
 function ManagedSelect({ label, value, onChange, options, onManage }) {
