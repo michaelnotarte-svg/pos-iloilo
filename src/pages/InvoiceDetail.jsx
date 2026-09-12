@@ -8,6 +8,7 @@ import { fetchMovements, onHandMap, lookup, inStockItemIds, avgKgBox, itemAvgMap
 import { useAuth } from '../lib/auth'
 import AttributionNote from '../components/AttributionNote'
 import SearchSelect from '../components/SearchSelect'
+import DependencyBlockModal from '../components/DependencyBlockModal'
 import { friendlyError } from '../lib/friendlyError'
 
 const STATUSES = ['Unpaid', 'Partial', 'Paid']
@@ -85,6 +86,7 @@ export default function InvoiceDetail() {
   const [deletePayTarget, setDeletePayTarget] = useState(null)
 
   const [deleteInvConfirm, setDeleteInvConfirm] = useState(false)
+  const [depBlock, setDepBlock] = useState(null) // dependency warning before delete
 
   const [storageOptions, setStorageOptions] = useState(STORAGE_FALLBACK)
   const [paymentOptions, setPaymentOptions] = useState(PAYMENT_FALLBACK)
@@ -414,13 +416,23 @@ export default function InvoiceDetail() {
               <>
                 <button onClick={() => setEditingHeader(true)} className="text-sm text-blue-600 hover:underline">Edit</button>
                 <span className="text-gray-300">|</span>
-                {/* Deleting an invoice with payments requires the Payments role —
-                    else it would erase payment history without that permission. */}
-                {(canPay || payments.length === 0) ? (
-                  <button onClick={() => setDeleteInvConfirm(true)} className="text-sm text-red-500 hover:underline">Delete</button>
-                ) : (
-                  <span className="text-xs text-gray-400 dark:text-gray-500" title="This invoice has payments. Only a user with the Payments role can delete it.">Delete (needs Payments role)</span>
-                )}
+                {/* Deleting an invoice requires clearing its payments first, so the
+                    deletion is auditable and done by the right role. */}
+                <button
+                  onClick={() => {
+                    if (payments.length > 0) {
+                      setDepBlock({
+                        title: 'Clear payments first',
+                        intro: `This invoice has ${payments.length} payment(s) totaling ${money(totalPaid)}. Clear all payments before deleting the invoice.`,
+                        rows: payments.map((p) => `${p.date_paid} · ${p.mode_of_payment || '—'} · ${money(p.amount_paid)}`),
+                        footer: canPay ? 'Delete them in the Payments section below, then delete the invoice.' : 'Clearing payments needs the Payments role.',
+                      })
+                      return
+                    }
+                    setDeleteInvConfirm(true)
+                  }}
+                  className="text-sm text-red-500 hover:underline"
+                >Delete</button>
               </>
             )}
           </div>
@@ -789,7 +801,7 @@ export default function InvoiceDetail() {
       {deleteInvConfirm && (
         <Confirm
           title="Delete this invoice?"
-          message={`Invoice #${inv.invoice_number} and all its lines and payments will be permanently deleted.`}
+          message={`Invoice #${inv.invoice_number} and all its lines will be deleted.`}
           onCancel={() => setDeleteInvConfirm(false)}
           onConfirm={deleteInvoice}
           destructive
@@ -804,6 +816,8 @@ export default function InvoiceDetail() {
           onChange={loadLists}
         />
       )}
+
+      {depBlock && <DependencyBlockModal {...depBlock} onClose={() => setDepBlock(null)} />}
     </div>
   )
 }

@@ -7,6 +7,7 @@ import { fetchMovements, onHandMap, lookup, inStockItemIds, avgKgBox } from '../
 import { useAuth } from '../lib/auth'
 import { friendlyError } from '../lib/friendlyError'
 import AttributionNote from '../components/AttributionNote'
+import DependencyBlockModal from '../components/DependencyBlockModal'
 
 const EMPTY_LINE = {
   item_id: '',
@@ -60,6 +61,8 @@ export default function PurchaseOrderDetail() {
 
   const [deleteLineTarget, setDeleteLineTarget] = useState(null)
   const [deletePOConfirm, setDeletePOConfirm] = useState(false)
+  const [depBlock, setDepBlock] = useState(null) // { title, intro, rows, footer }
+  const [checking, setChecking] = useState(false)
 
   const [invMap, setInvMap] = useState(new Map())
   const [showAllItems, setShowAllItems] = useState(false)
@@ -222,6 +225,63 @@ export default function PurchaseOrderDetail() {
     fetchAll()
   }
 
+  // Find sales that already drew on these stock batches (FIFO allocations by
+  // item+storage+batch). Deleting consumed stock would corrupt inventory, so we
+  // block and point at the invoices that must be deleted first.
+  async function findStockDependents(entries) {
+    const keys = new Set(entries.map((e) => `${e.item_id}|${e.storage}|${e.batch_number}`))
+    const batches = [...new Set(entries.map((e) => e.batch_number).filter(Boolean))]
+    if (!batches.length) return []
+    const { data } = await supabase
+      .from('invoice_line_allocations')
+      .select('invoice_id, item_id, storage, batch_number, invoices!inner(invoice_number, deleted_at)')
+      .in('batch_number', batches)
+    const nameOf = Object.fromEntries(lines.map((l) => [l.item_id, l.items?.name ?? '—']))
+    const seen = new Set()
+    const rows = []
+    for (const a of data ?? []) {
+      if (a.invoices?.deleted_at) continue
+      if (!keys.has(`${a.item_id}|${a.storage}|${a.batch_number}`)) continue
+      const k = `${a.invoice_id}|${a.item_id}`
+      if (seen.has(k)) continue
+      seen.add(k)
+      rows.push(`${nameOf[a.item_id] || 'Item'} (batch ${a.batch_number}) → Invoice #${a.invoices?.invoice_number ?? '?'}`)
+    }
+    return rows
+  }
+
+  async function askDeleteLine(l) {
+    setChecking(true)
+    const rows = await findStockDependents([l])
+    setChecking(false)
+    if (rows.length) {
+      setDepBlock({
+        title: 'Stock already used by sales',
+        intro: `“${l.items?.name ?? 'This item'}” (batch ${l.batch_number}) is already associated with the invoice(s) below. Delete those invoices first, then delete this stock.`,
+        rows,
+        footer: 'Deleting consumed stock would make inventory inaccurate.',
+      })
+      return
+    }
+    setDeleteLineTarget(l)
+  }
+
+  async function askDeletePO() {
+    setChecking(true)
+    const rows = await findStockDependents(lines)
+    setChecking(false)
+    if (rows.length) {
+      setDepBlock({
+        title: 'Delivery already used by sales',
+        intro: 'Stock from this delivery has already been sold. Delete the invoice(s) below first, then delete this delivery.',
+        rows,
+        footer: 'Deleting consumed stock would make inventory inaccurate.',
+      })
+      return
+    }
+    setDeletePOConfirm(true)
+  }
+
   async function deleteLine() {
     if (!deleteLineTarget) return
     await supabase.from('stock_entries').delete().eq('id', deleteLineTarget.id)
@@ -276,8 +336,9 @@ export default function PurchaseOrderDetail() {
                 </button>
                 <span className="text-gray-300">|</span>
                 <button
-                  onClick={() => setDeletePOConfirm(true)}
-                  className="text-sm text-red-500 hover:underline"
+                  onClick={askDeletePO}
+                  disabled={checking}
+                  className="text-sm text-red-500 hover:underline disabled:opacity-50"
                 >
                   Delete Delivery
                 </button>
@@ -407,7 +468,7 @@ export default function PurchaseOrderDetail() {
                     <td className="px-4 py-3 text-gray-500 dark:text-gray-400">{l.date}</td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
                       {canEdit && <button onClick={() => openEditLine(l)} className="text-blue-600 hover:underline text-xs mr-3">Edit</button>}
-                      {canEdit && <button onClick={() => setDeleteLineTarget(l)} className="text-red-500 hover:underline text-xs">Delete</button>}
+                      {canEdit && <button onClick={() => askDeleteLine(l)} disabled={checking} className="text-red-500 hover:underline text-xs disabled:opacity-50">Delete</button>}
                     </td>
                   </tr>
                 ))}
@@ -613,6 +674,8 @@ export default function PurchaseOrderDetail() {
           </div>
         </div>
       )}
+
+      {depBlock && <DependencyBlockModal {...depBlock} onClose={() => setDepBlock(null)} />}
     </div>
   )
 }
