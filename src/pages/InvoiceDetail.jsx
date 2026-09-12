@@ -51,6 +51,7 @@ export default function InvoiceDetail() {
   const navigate = useNavigate()
   const { activeLocation, canWrite, profile } = useAuth()
   const canEdit = canWrite('Sales')
+  const canPay = canWrite('Payments') // sensitive: recording/editing payments
   // Branches that don't maintain inventory (Bacolod) skip the on-hand/oversell
   // guard and FIFO allocation — every sale would otherwise read as 0-on-hand.
   const tracksStock = activeLocation !== 'Bacolod'
@@ -362,7 +363,7 @@ export default function InvoiceDetail() {
       ;({ error: err } = await supabase.from('partial_payments').insert(payload))
     }
     setSavingPay(false)
-    if (err) { setPayError(friendlyError(err, { profile, module: 'Sales' })); return }
+    if (err) { setPayError(friendlyError(err, { profile, module: 'Payments' })); return }
     setPayModal(false)
     await recomputeStatus()
     fetchAll()
@@ -408,12 +409,18 @@ export default function InvoiceDetail() {
               </span>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             {!editingHeader && canEdit && (
               <>
                 <button onClick={() => setEditingHeader(true)} className="text-sm text-blue-600 hover:underline">Edit</button>
                 <span className="text-gray-300">|</span>
-                <button onClick={() => setDeleteInvConfirm(true)} className="text-sm text-red-500 hover:underline">Delete</button>
+                {/* Deleting an invoice with payments requires the Payments role —
+                    else it would erase payment history without that permission. */}
+                {(canPay || payments.length === 0) ? (
+                  <button onClick={() => setDeleteInvConfirm(true)} className="text-sm text-red-500 hover:underline">Delete</button>
+                ) : (
+                  <span className="text-xs text-gray-400 dark:text-gray-500" title="This invoice has payments. Only a user with the Payments role can delete it.">Delete (needs Payments role)</span>
+                )}
               </>
             )}
           </div>
@@ -574,7 +581,7 @@ export default function InvoiceDetail() {
           <div>
             <h3 className="font-semibold text-gray-800 dark:text-gray-100">Payments</h3>
           </div>
-          {canEdit && <button onClick={openAddPayment} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg">
+          {canPay && <button onClick={openAddPayment} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg">
             + Add Payment
           </button>}
         </div>
@@ -605,8 +612,8 @@ export default function InvoiceDetail() {
                     <td className="px-4 py-3 text-right text-gray-600 dark:text-gray-300">{p.remaining_balance != null ? `${money(p.remaining_balance)}` : '—'}</td>
                     <td className="px-4 py-3 text-gray-500 dark:text-gray-400 max-w-xs truncate" title={p.notes ?? ''}>{p.notes || '—'}</td>
                     <td className="px-4 py-3 text-right whitespace-nowrap">
-                      {canEdit && <button onClick={() => openEditPayment(p)} className="text-blue-600 hover:underline text-xs mr-3">Edit</button>}
-                      {canEdit && <button onClick={() => setDeletePayTarget(p)} className="text-red-500 hover:underline text-xs">Delete</button>}
+                      {canPay && <button onClick={() => openEditPayment(p)} className="text-blue-600 hover:underline text-xs mr-3">Edit</button>}
+                      {canPay && <button onClick={() => setDeletePayTarget(p)} className="text-red-500 hover:underline text-xs">Delete</button>}
                     </td>
                   </tr>
                 ))}

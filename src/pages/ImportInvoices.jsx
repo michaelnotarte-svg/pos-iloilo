@@ -25,6 +25,7 @@ export default function ImportInvoices() {
   const navigate = useNavigate()
   const { activeLocation, canWrite, profile } = useAuth()
   const canEdit = canWrite('Sales')
+  const canPay = canWrite('Payments') // recording a payment on import is sensitive
 
   const [items, setItems] = useState([])
   const [customers, setCustomers] = useState([])
@@ -298,8 +299,9 @@ export default function ImportInvoices() {
     if (e2) { setSaving(false); setSaveError(friendlyError(e2, { profile, module: 'Sales' })); return }
 
     // Marked Paid → generate a payment line for the full invoice total.
+    // Requires the Payments role (RLS enforces it too).
     let payWarn = ''
-    if (f.payment_status === 'Paid') {
+    if (canPay && f.payment_status === 'Paid') {
       const total = lines.reduce((s, l) => s + (num(l.kilos) || 0) * (num(l.unit_price) || 0), 0)
       if (total > 0.01) {
         const { error: e3 } = await supabase.from('partial_payments').insert({
@@ -310,7 +312,7 @@ export default function ImportInvoices() {
           remaining_balance: 0,
           notes: 'Recorded on receipt import',
         })
-        if (e3) payWarn = friendlyError(e3, { profile, module: 'Sales' })
+        if (e3) payWarn = friendlyError(e3, { profile, module: 'Payments' })
       }
     }
     setSaving(false)
@@ -491,27 +493,33 @@ export default function ImportInvoices() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Lbl>Payment Status</Lbl>
-                <select value={cur.form.payment_status} onChange={(e) => updateForm({ payment_status: e.target.value })} className={inputCls}>
-                  <option>Unpaid</option>
-                  <option>Paid</option>
-                </select>
-              </div>
-              <div>
-                <Lbl>Mode of Payment</Lbl>
-                <select value={cur.form.mode_of_payment}
-                  onChange={(e) => updateForm({ mode_of_payment: e.target.value })}
-                  disabled={cur.form.payment_status !== 'Paid'} className={inputCls}>
-                  {paymentOptions.map((m) => <option key={m}>{m}</option>)}
-                </select>
-              </div>
-            </div>
-            {cur.form.payment_status === 'Paid' && (
-              <p className="text-[11px] text-gray-400 dark:text-gray-500 -mt-1">
-                A payment for the full invoice total will be recorded as {cur.form.mode_of_payment}.
-              </p>
+            {canPay ? (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Lbl>Payment Status</Lbl>
+                    <select value={cur.form.payment_status} onChange={(e) => updateForm({ payment_status: e.target.value })} className={inputCls}>
+                      <option>Unpaid</option>
+                      <option>Paid</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Lbl>Mode of Payment</Lbl>
+                    <select value={cur.form.mode_of_payment}
+                      onChange={(e) => updateForm({ mode_of_payment: e.target.value })}
+                      disabled={cur.form.payment_status !== 'Paid'} className={inputCls}>
+                      {paymentOptions.map((m) => <option key={m}>{m}</option>)}
+                    </select>
+                  </div>
+                </div>
+                {cur.form.payment_status === 'Paid' && (
+                  <p className="text-[11px] text-gray-400 dark:text-gray-500 -mt-1">
+                    A payment for the full invoice total will be recorded as {cur.form.mode_of_payment}.
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="text-[11px] text-gray-400 dark:text-gray-500">Saved as Unpaid — recording a payment needs the Payments role.</p>
             )}
 
             {/* Lines */}
