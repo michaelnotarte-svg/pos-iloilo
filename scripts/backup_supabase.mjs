@@ -27,6 +27,17 @@ const key = env.SUPABASE_SERVICE_ROLE_KEY
 if (!url || !key) { console.error('Missing VITE_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY in .env.local'); process.exit(1) }
 const sb = createClient(url, key, { auth: { persistSession: false } })
 
+// Heartbeat write — keeps the Supabase project from pausing on inactivity and
+// records when the backup last ran. Done first so it still lands if the dump
+// below hiccups. Reads alone also count as activity; this is belt-and-suspenders.
+try {
+  const { error } = await sb.from('app_settings').upsert(
+    { scope: 'global', key: 'backup_heartbeat', value: { last_run: new Date().toISOString(), source: 'daily-backup' } },
+    { onConflict: 'scope,key' },
+  )
+  console.log(error ? `heartbeat: FAILED — ${error.message}` : 'heartbeat: ok')
+} catch (e) { console.log(`heartbeat: FAILED — ${e.message}`) }
+
 // Every table the app owns (parents before children — handy for restore order).
 const TABLES = [
   'locations', 'profiles', 'list_options', 'app_settings', 'expense_categories',
