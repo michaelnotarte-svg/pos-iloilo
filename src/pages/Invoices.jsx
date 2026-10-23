@@ -237,17 +237,22 @@ export default function Invoices() {
     if (viewMode === 'items') {
       const rows = filtered.flatMap((inv) => {
         const lines = inv.invoice_lines ?? []
-        if (!lines.length) return [{ number: inv.invoice_number, date: inv.date, customer: cust(inv), item: '(no items)', batch: '', boxes: '', kilos: '', amount: '' }]
+        if (!lines.length) return [{ number: inv.invoice_number, date: inv.date, customer: cust(inv), item: '(no items)', batch: '', boxes: '', pieces: '', kilos: '', amount: '' }]
+        // Unit lines (Chorizo) store a piece count; Kilos carries true weight (×0.5).
+        const unit = isUnitInv(inv)
         return lines.map((l) => ({
           number: inv.invoice_number, date: inv.date, customer: cust(inv),
           item: l.items?.name ?? '', batch: l.batch_number ?? '',
-          boxes: l.boxes ?? '', kilos: l.kilos ?? '', amount: Number(l.amount || 0).toFixed(2),
+          boxes: unit ? '' : (l.boxes ?? ''),
+          pieces: unit ? (l.kilos ?? '') : '',
+          kilos: unit ? (Number(l.kilos || 0) * KG_PER_PIECE).toFixed(2) : (l.kilos ?? ''),
+          amount: Number(l.amount || 0).toFixed(2),
         }))
       })
       downloadCSV(`invoices_${activeLocation}_items_${scope}.csv`, rows, [
         { key: 'number', label: 'Invoice #' }, { key: 'date', label: 'Date' }, { key: 'customer', label: 'Customer' },
         { key: 'item', label: 'Item' }, { key: 'batch', label: 'Batch(es)' }, { key: 'boxes', label: 'Boxes' },
-        { key: 'kilos', label: 'Kilos' }, { key: 'amount', label: 'Amount' },
+        { key: 'pieces', label: 'Pieces' }, { key: 'kilos', label: 'Kilos (weight)' }, { key: 'amount', label: 'Amount' },
       ])
     } else {
       const rows = filtered.map((inv) => {
