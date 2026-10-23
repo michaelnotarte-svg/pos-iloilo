@@ -2,7 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase, selectAll } from '../lib/supabase'
 import { money } from '../lib/settings'
-import { fetchListNames, PAYMENT_FALLBACK, STORAGE_FALLBACK, SALE_TYPE_FALLBACK, PRODUCT_LINE_FALLBACK, DEFAULT_PRODUCT_LINE } from '../lib/lists'
+import { fetchListNames, PAYMENT_FALLBACK, STORAGE_FALLBACK, SALE_TYPE_FALLBACK, PRODUCT_LINE_FALLBACK, DEFAULT_PRODUCT_LINE, uomForLine } from '../lib/lists'
+
+// Chorizo (unit-sold) is sold per piece; each piece = 500 g. Hardcoded.
+const KG_PER_PIECE = 0.5
 import ManageListModal from '../components/ManageListModal'
 import ManageCustomersModal from '../components/ManageCustomersModal'
 import ReportLetterhead from '../components/ReportLetterhead'
@@ -173,26 +176,32 @@ export default function Invoices() {
   const uAmount = unpaidKpi ? Number(unpaidKpi.amount) : kpiUnpaidAmount
 
   // ── Totals for the filtered set (shown above the list) ──
-  const kilosOf = (inv) => (inv.invoice_lines ?? []).reduce((s, l) => s + (Number(l.kilos) || 0), 0)
+  const qtyOf = (inv) => (inv.invoice_lines ?? []).reduce((s, l) => s + (Number(l.kilos) || 0), 0)
+  const isUnitInv = (inv) => uomForLine(inv.product_line || DEFAULT_PRODUCT_LINE) === 'unit'
+  // Weight in kg: unit invoices (Chorizo) convert pieces → kg; pieces tracked apart.
+  const weightOf = (inv) => (isUnitInv(inv) ? qtyOf(inv) * KG_PER_PIECE : qtyOf(inv))
+  const piecesOf = (inv) => (isUnitInv(inv) ? qtyOf(inv) : 0)
   const boxesOf = (inv) => (inv.invoice_lines ?? []).reduce((s, l) => s + (Number(l.boxes) || 0), 0)
   const totals = filtered.reduce(
     (a, inv) => {
       a.count++
-      a.kilos += kilosOf(inv)
+      a.kilos += weightOf(inv)
+      a.pieces += piecesOf(inv)
       a.boxes += boxesOf(inv)
       a.amount += grandTotal(inv)
       a.paid += paidOf(inv)
       return a
     },
-    { count: 0, kilos: 0, boxes: 0, amount: 0, paid: 0 }
+    { count: 0, kilos: 0, pieces: 0, boxes: 0, amount: 0, paid: 0 }
   )
   // Breakout per sale type
   const byType = {}
   for (const inv of filtered) {
     const t = inv.sale_type || '—'
-    const b = byType[t] || (byType[t] = { count: 0, kilos: 0, boxes: 0, amount: 0 })
+    const b = byType[t] || (byType[t] = { count: 0, kilos: 0, pieces: 0, boxes: 0, amount: 0 })
     b.count++
-    b.kilos += kilosOf(inv)
+    b.kilos += weightOf(inv)
+    b.pieces += piecesOf(inv)
     b.boxes += boxesOf(inv)
     b.amount += grandTotal(inv)
   }
@@ -423,7 +432,7 @@ export default function Invoices() {
         <div className="mb-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 overflow-hidden">
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-x divide-y sm:divide-y-0 divide-gray-100 dark:divide-gray-700">
             <Tot label="Invoices" value={totals.count.toLocaleString()} />
-            <Tot label="Total Kilos" value={nfx(totals.kilos)} />
+            <Tot label="Total Kilos" value={`${nfx(totals.kilos)}${totals.pieces > 0 ? ` · ${nfx(totals.pieces, 0)} pcs` : ''}`} />
             <Tot label="Total Boxes" value={nfx(totals.boxes, 0)} />
             <Tot label="Total Invoice" value={money(totals.amount)} />
             <Tot label="Total Paid" value={money(totals.paid)} accent="text-green-600 dark:text-green-400" />
@@ -439,6 +448,7 @@ export default function Invoices() {
                       <th className="text-left font-medium py-1">Type</th>
                       <th className="text-right font-medium py-1">Invoices</th>
                       <th className="text-right font-medium py-1">Kilos</th>
+                      <th className="text-right font-medium py-1">Pieces</th>
                       <th className="text-right font-medium py-1">Boxes</th>
                       <th className="text-right font-medium py-1">Amount</th>
                     </tr>
@@ -449,6 +459,7 @@ export default function Invoices() {
                         <td className="py-1.5 text-gray-700 dark:text-gray-200">{t}</td>
                         <td className="py-1.5 text-right text-gray-600 dark:text-gray-300">{b.count.toLocaleString()}</td>
                         <td className="py-1.5 text-right text-gray-600 dark:text-gray-300">{nfx(b.kilos)}</td>
+                        <td className="py-1.5 text-right text-gray-600 dark:text-gray-300">{b.pieces > 0 ? nfx(b.pieces, 0) : '—'}</td>
                         <td className="py-1.5 text-right text-gray-600 dark:text-gray-300">{nfx(b.boxes, 0)}</td>
                         <td className="py-1.5 text-right font-medium text-gray-700 dark:text-gray-200">{money(b.amount)}</td>
                       </tr>

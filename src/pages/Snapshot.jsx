@@ -116,23 +116,30 @@ export default function Snapshot() {
   }
 
   function exportCSV() {
-    const rows = lines.map(({ inv, l }) => ({
-      OR: inv.invoice_number,
-      Customer: custName(inv),
-      Item: l.items?.name ?? '',
-      UP: l.unit_price,
-      Boxes: l.boxes,
-      Kgs: l.kilos,
-      Amount: num(l.amount).toFixed(2),
-      MOP: mopOf(inv),
-    }))
+    const rows = lines.map(({ inv, l }) => {
+      // Unit lines (Chorizo) store a piece count; Kgs column carries the true
+      // weight (pieces × 500 g), with the raw count in its own Pieces column.
+      const isUnit = uomForLine(inv.product_line || DEFAULT_PRODUCT_LINE) === 'unit'
+      return {
+        OR: inv.invoice_number,
+        Customer: custName(inv),
+        Item: l.items?.name ?? '',
+        UP: l.unit_price,
+        Boxes: isUnit ? '' : l.boxes,
+        Pieces: isUnit ? l.kilos : '',
+        Kgs: isUnit ? (num(l.kilos) * KG_PER_PIECE).toFixed(2) : l.kilos,
+        Amount: num(l.amount).toFixed(2),
+        MOP: mopOf(inv),
+      }
+    })
     downloadCSV(`daily_snapshot_${date}.csv`, rows, [
       { key: 'OR', label: 'OR no.' },
       { key: 'Customer', label: 'Customer Name' },
       { key: 'Item', label: 'Item' },
       { key: 'UP', label: 'U.P.' },
       { key: 'Boxes', label: 'Boxes' },
-      { key: 'Kgs', label: 'Kgs' },
+      { key: 'Pieces', label: 'Pieces' },
+      { key: 'Kgs', label: 'Kgs (weight)' },
       { key: 'Amount', label: 'Amount' },
       { key: 'MOP', label: 'MOP' },
     ])
