@@ -9,6 +9,9 @@ import ReportLetterhead from '../components/ReportLetterhead'
 const num = (x) => Number(x) || 0
 const kg = (n) => Number(n).toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
 const bxn = (n) => Number(n).toLocaleString(undefined, { maximumFractionDigits: 2 })
+// Unit-sold lines (Chorizo) are sold per piece; each piece weighs 500 g. Hardcoded
+// (business-stable) so a piece count can be expressed as an accurate weight.
+const KG_PER_PIECE = 0.5
 
 function custName(inv) {
   if (!inv.customers) return '—'
@@ -164,22 +167,23 @@ export default function Snapshot() {
             {/* KPI subheaders */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
               <Card title="Sales" accent="blue">
-                {multiLine ? (
+                {plGroups.length === 0 ? (
                   <>
-                    {plGroups.map((g) => (
-                      <div key={g.pl} className="border-b border-gray-100 dark:border-gray-700 last:border-0 pb-1.5 mb-1.5 last:pb-0 last:mb-0">
-                        <Stat label={g.pl} value={money(g.amount)} big />
-                        <Stat label={g.isUnit ? 'Units sold' : 'Kilos sold'} value={g.isUnit ? `${bxn(g.qty)} units` : `${kg(g.qty)} kg`} />
-                        {!g.isUnit && <Stat label="Boxes sold" value={bxn(g.boxes)} />}
-                      </div>
-                    ))}
-                    <Stat label="All lines" value={money(salesAmount)} />
+                    <Stat label="Amount" value={money(0)} big />
+                    <Stat label="Boxes sold" value={bxn(0)} />
+                    <Stat label="Kilos sold" value={`${kg(0)} kg`} />
                   </>
                 ) : (
                   <>
-                    <Stat label="Amount" value={money(salesAmount)} big />
-                    <Stat label="Boxes sold" value={bxn(boxesSold)} />
-                    <Stat label="Kilos sold" value={`${kg(kilosSold)} kg`} />
+                    {plGroups.map((g) => (
+                      <div key={g.pl} className="border-b border-gray-100 dark:border-gray-700 last:border-0 pb-1.5 mb-1.5 last:pb-0 last:mb-0">
+                        <Stat label={multiLine ? g.pl : 'Amount'} value={money(g.amount)} big />
+                        <Stat label={g.isUnit ? 'Pieces sold' : 'Kilos sold'} value={g.isUnit ? `${bxn(g.qty)} pcs` : `${kg(g.qty)} kg`} />
+                        {g.isUnit && <Stat label="Weight" value={`${kg(g.qty * KG_PER_PIECE)} kg`} />}
+                        {!g.isUnit && <Stat label="Boxes sold" value={bxn(g.boxes)} />}
+                      </div>
+                    ))}
+                    {multiLine && <Stat label="All lines" value={money(salesAmount)} />}
                   </>
                 )}
               </Card>
@@ -301,7 +305,7 @@ export default function Snapshot() {
                         <th className="text-left px-3 py-2">Item</th>
                         <th className="text-right px-3 py-2">U.P.</th>
                         {!g.isUnit && <th className="text-right px-3 py-2">Boxes</th>}
-                        <th className="text-right px-3 py-2">{g.isUnit ? 'Units' : 'Kgs'}</th>
+                        <th className="text-right px-3 py-2">{g.isUnit ? 'Pieces' : 'Kgs'}</th>
                         <th className="text-right px-3 py-2">Amount</th>
                         <th className="text-left px-3 py-2">MOP</th>
                       </tr>
@@ -314,7 +318,7 @@ export default function Snapshot() {
                           <td className="px-3 py-2 text-gray-800 dark:text-gray-100">{l.items?.name ?? '—'}</td>
                           <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{bxn(l.unit_price)}</td>
                           {!g.isUnit && <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{bxn(l.boxes)} Boxes</td>}
-                          <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{g.isUnit ? `${bxn(l.kilos)} units` : `${kg(l.kilos)} kgs`}</td>
+                          <td className="px-3 py-2 text-right text-gray-600 dark:text-gray-300">{g.isUnit ? `${bxn(l.kilos)} pcs` : `${kg(l.kilos)} kgs`}</td>
                           <td className="px-3 py-2 text-right font-medium text-gray-800 dark:text-gray-100">{money(l.amount)}</td>
                           <td className="px-3 py-2 text-gray-600 dark:text-gray-300">{idx === 0 ? mopOf(inv) : ''}</td>
                         </tr>
@@ -324,7 +328,7 @@ export default function Snapshot() {
                       <tr>
                         <td colSpan={4} className="px-3 py-2 text-right text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Totals</td>
                         {!g.isUnit && <td className="px-3 py-2 text-right">{bxn(g.boxes)}</td>}
-                        <td className="px-3 py-2 text-right">{g.isUnit ? `${bxn(g.qty)}` : kg(g.qty)}</td>
+                        <td className="px-3 py-2 text-right">{g.isUnit ? `${bxn(g.qty)} pcs · ${kg(g.qty * KG_PER_PIECE)} kg` : kg(g.qty)}</td>
                         <td className="px-3 py-2 text-right">{money(g.amount)}</td>
                         <td></td>
                       </tr>
